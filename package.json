@@ -1,0 +1,26 @@
+{
+  "name": "gbbackend",
+  "version": "1.0.0",
+  "description": "Backend for Gym Buddy, Software Engineering project.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lANXEZ/GBBackend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/lANXEZ/GBBackend/issues"
+  },
+  "homepage": "https://github.com/lANXEZ/GBBackend#readme",
+  "dependencies": {
+    "canvas": "^3.2.1",
+    "cors": "^2.8.6",
+    "express": "^5.2.1"
+  }
+}
