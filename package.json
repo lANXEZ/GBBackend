@@ -4,6 +4,7 @@
   "description": "Backend for Gym Buddy, Software Engineering project.",
   "main": "index.js",
   "scripts": {
+    "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -19,7 +20,7 @@
   },
   "homepage": "https://github.com/lANXEZ/GBBackend#readme",
   "dependencies": {
-    "canvas": "^3.2.1",
+    "canvas": "^3.2.2",
     "cors": "^2.8.6",
     "express": "^5.2.1"
   }
