@@ -1,0 +1,197 @@
+-- Create and select the database
+DROP DATABASE IF EXISTS gymbro;
+CREATE DATABASE IF NOT EXISTS gymbro;
+USE gymbro;
+
+-- User Table
+CREATE TABLE User ( 
+    UserID BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, 
+    Username VARCHAR(50) NOT NULL, 
+    Password VARCHAR(255) NOT NULL, 
+    FirstName VARCHAR(20) NOT NULL, 
+    LastName VARCHAR(20) NOT NULL, 
+    DoB DATE NOT NULL, 
+    Status VARCHAR(20) NOT NULL 
+);
+
+-- WorkoutPlan Table
+CREATE TABLE WorkoutPlan ( 
+    PlanID BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, 
+    PlanName VARCHAR(255) NOT NULL,
+    UserID BIGINT NOT NULL, 
+    Type CHAR(1) NOT NULL, 
+    ProviderID BIGINT,
+    FOREIGN KEY (UserID) REFERENCES User(UserID),
+    FOREIGN KEY (ProviderID) REFERENCES User(UserID)
+);
+
+-- WorkingDay Table
+CREATE TABLE WorkingDay ( 
+    WorkingDayID BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, 
+    Day INT NOT NULL 
+);
+
+-- ExerciseMoves Table
+CREATE TABLE ExerciseMoves ( 
+    ExMoveID BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, 
+    Steps TEXT NOT NULL, 
+    Description TEXT NOT NULL, 
+    Caution TEXT, 
+    URL BIGINT, 
+    Accessibility VARCHAR(10) NOT NULL, 
+    UserID BIGINT, 
+    RecordType VARCHAR(20) NOT NULL, 
+    ProgressType VARCHAR(10) NOT NULL, 
+    FOREIGN KEY (UserID) REFERENCES User(UserID)
+);
+
+-- WorkoutRoutine Table (Joining Table - No Auto Increment needed for composite PK)
+CREATE TABLE WorkoutRoutine ( 
+    PlanID BIGINT NOT NULL, 
+    WorkingDayID BIGINT NOT NULL, 
+    PRIMARY KEY (PlanID, WorkingDayID),
+    FOREIGN KEY (PlanID) REFERENCES WorkoutPlan(PlanID) ON DELETE CASCADE,
+    FOREIGN KEY (WorkingDayID) REFERENCES WorkingDay(WorkingDayID) ON DELETE CASCADE
+);
+
+-- ExerciseList Table (Joining Table - No Auto Increment needed for composite PK)
+CREATE TABLE ExerciseList ( 
+    WorkingDayID BIGINT NOT NULL, 
+    ExMoveID BIGINT NOT NULL, 
+    PRIMARY KEY (WorkingDayID, ExMoveID),
+    FOREIGN KEY (WorkingDayID) REFERENCES WorkingDay(WorkingDayID) ON DELETE CASCADE,
+    FOREIGN KEY (ExMoveID) REFERENCES ExerciseMoves(ExMoveID) ON DELETE CASCADE
+);
+
+-- Session Table
+CREATE TABLE Session ( 
+    SessionID BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, 
+    UserID BIGINT NOT NULL, 
+    WorkingDayID BIGINT NOT NULL, 
+    ExMoveID BIGINT NOT NULL,
+    SessionDate DATE NOT NULL,
+    FOREIGN KEY (UserID) REFERENCES User(UserID),
+    FOREIGN KEY (WorkingDayID) REFERENCES ExerciseList(WorkingDayID),
+    FOREIGN KEY (ExMoveID) REFERENCES ExerciseList(ExMoveID)
+);
+
+-- PersonalRecord Table
+-- Note: Weight is DECIMAL(4,2) which allows max 99.99kg.
+CREATE TABLE PersonalRecord ( 
+    PRID BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, 
+    SessionID BIGINT NOT NULL, 
+    Weight DECIMAL(4,2), 
+    Rep INT, 
+    Time INT, 
+    FOREIGN KEY (SessionID) REFERENCES Session(SessionID) ON DELETE CASCADE
+);
+
+-- --------------------------------------------------------
+-- MOCK DATA INSERTS
+-- --------------------------------------------------------
+
+-- 1. User Table (IDs: 1, 2, 3)
+INSERT INTO User (Username, Password, FirstName, LastName, DoB, Status) VALUES
+('testgymgoer', 'password', 'John', 'Doe', '1995-05-15', 'user'),
+('khlong_nueng_coach', 'password', 'Somchai', 'Trainer', '1990-10-12', 'trainer'),
+('boulder_newbie', 'password', 'Jane', 'Client', '2002-02-20', 'training client');
+
+-- 2. WorkoutPlan Table (IDs: 1, 2, 3)
+INSERT INTO WorkoutPlan (UserID, PlanName, Type, ProviderID) VALUES
+(1,' Plan A' , 'C', NULL), 
+(2,' Plan B', 'C', NULL), 
+(3,' Plan C', 'P', 2); 
+
+-- 3. WorkingDay Table (IDs: 1, 2, 3)
+INSERT INTO WorkingDay (Day) VALUES
+(0), -- Monday
+(2), -- Wednesday
+(4); -- Friday
+
+-- 4. ExerciseMoves Table (IDs: 1, 2, 3, 4, 5)
+INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType) VALUES
+('1. Grab campus rung. 2. Pull up dynamically.', 'Campus Board Lache', 'Warm up shoulders.', NULL, 'public', NULL, 'rep', 'increase'),
+('1. Hang from bar. 2. Pull chin over bar.', 'Standard Pull-up', NULL, NULL, 'public', NULL, 'rep', 'increase'),
+('1. Set timer. 2. Hold plank position.', 'Core Plank', 'Keep back straight.', 10101010, 'private', 1, 'time', 'increase'),
+('1. Unrack bar. 2. Lower to chest. 3. Press up.', 'Barbell Bench Press', 'Use a spotter for heavy sets.', NULL, 'public', NULL, 'weight', 'increase'),
+('1. Rest bar on traps. 2. Squat down. 3. Stand up.', 'Barbell Squat', 'Maintain neutral spine.', NULL, 'public', NULL, 'weight', 'increase');
+
+-- 5. WorkoutRoutine Table 
+INSERT INTO WorkoutRoutine (PlanID, WorkingDayID) VALUES
+(1, 1),
+(1, 2),
+(2, 3),
+(3, 1);
+
+-- 6. ExerciseList Table 
+-- Adding Bench Press (4) and Squats (5) to Working Day 1 to allow high-volume sets
+INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES
+(1, 1), -- Day 1: Lache
+(1, 2), -- Day 1: Pull-up
+(1, 4), -- Day 1: Bench Press
+(1, 5), -- Day 1: Squat
+(2, 3), -- Day 2: Plank
+(3, 2); -- Day 3: Pull-up
+
+-- 7. Session Table (IDs: 1 to 6)
+-- A "Session" is one exercise move performed by a user on a specific day
+INSERT INTO Session (UserID, WorkingDayID, ExMoveID, SessionDate) VALUES
+(1, 1, 1, '2026-03-16'), -- Session 1: John doing Campus Board Laches
+(1, 1, 2, '2026-03-16'), -- Session 2: John doing Pull-ups
+(3, 1, 2, '2026-03-14'), -- Session 3: Jane doing Pull-ups
+(1, 2, 3, '2026-03-18'), -- Session 4: John doing Planks
+(1, 1, 4, '2026-03-16'), -- Session 5: John doing Bench Press
+(1, 1, 5, '2026-03-16'); -- Session 6: John doing Squats
+
+-- 8. PersonalRecord Table (The Sets for each Session)
+-- Demonstrating that 1 Session = Many Sets (PersonalRecords)
+INSERT INTO PersonalRecord (SessionID, Weight, Rep, Time) VALUES
+
+-- ======= SESSION 5: BENCH PRESS (John, Day 1) =======
+-- Demonstrating a heavy 8-set routine (warmups, working sets, PR attempt, drop set)
+(5, 20.00, 15, NULL),  -- Set 1: Empty bar warmup
+(5, 40.00, 10, NULL),  -- Set 2: Light warmup
+(5, 60.00,  8, NULL),  -- Set 3: Moderate
+(5, 80.00,  5, NULL),  -- Set 4: Working set
+(5, 85.00,  5, NULL),  -- Set 5: Working set
+(5, 90.00,  3, NULL),  -- Set 6: Heavy set
+(5, 95.00,  1, NULL),  -- Set 7: 1-Rep Max attempt!
+(5, 60.00, 12, NULL),  -- Set 8: Drop set / burnout
+
+-- ======= SESSION 6: SQUATS (John, Day 1) =======
+-- Demonstrating a classic 5-set working routine after 2 warmups
+(6, 20.00, 10, NULL),  -- Set 1: Empty bar warmup
+(6, 60.00,  8, NULL),  -- Set 2: Warmup
+(6, 80.00,  5, NULL),  -- Set 3: Working set 1
+(6, 80.00,  5, NULL),  -- Set 4: Working set 2
+(6, 80.00,  5, NULL),  -- Set 5: Working set 3
+(6, 80.00,  5, NULL),  -- Set 6: Working set 4
+(6, 80.00,  5, NULL),  -- Set 7: Working set 5
+
+-- ======= SESSION 2: WEIGHTED PULL-UPS (John, Day 1) =======
+-- Progressive overload on weighted pull-ups
+(2, NULL,  12, NULL),  -- Set 1: Bodyweight only
+(2, 5.00,  10, NULL),  -- Set 2: 5kg added
+(2, 10.00,  8, NULL),  -- Set 3: 10kg added
+(2, 15.00,  5, NULL),  -- Set 4: 15kg added
+(2, 20.00,  3, NULL),  -- Set 5: 20kg added (Heavy)
+
+-- ======= SESSION 4: CORE PLANKS (John, Day 2) =======
+-- Time-based session (4 sets, decreasing duration as fatigue sets in)
+(4, NULL, NULL, 120),  -- Set 1: 2 minutes
+(4, NULL, NULL, 90),   -- Set 2: 1.5 minutes
+(4, NULL, NULL, 60),   -- Set 3: 1 minute
+(4, NULL, NULL, 45),   -- Set 4: 45 seconds
+
+-- ======= SESSION 1: CAMPUS BOARD (John, Day 1) =======
+-- Rep-based explosive work
+(1, NULL, 8, NULL),    -- Set 1
+(1, NULL, 8, NULL),    -- Set 2
+(1, NULL, 6, NULL),    -- Set 3 (Fatigue)
+
+-- ======= SESSION 3: PULL-UPS (Jane, Day 1) =======
+-- Beginner working on volume
+(3, NULL, 5, NULL),    -- Set 1
+(3, NULL, 4, NULL),    -- Set 2
+(3, NULL, 3, NULL),    -- Set 3
+(3, NULL, 3, NULL);    -- Set 4
