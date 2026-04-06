@@ -37,7 +37,7 @@ CREATE TABLE ExerciseMoves (
     Steps TEXT NOT NULL, 
     Description TEXT NOT NULL, 
     Caution TEXT, 
-    URL BIGINT, 
+    URL VARCHAR(500), 
     Accessibility VARCHAR(10) NOT NULL, 
     UserID BIGINT, 
     RecordType VARCHAR(20) NOT NULL, 

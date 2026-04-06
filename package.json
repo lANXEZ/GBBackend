@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/lANXEZ/GBBackend#readme",
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "canvas": "^3.2.2",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
