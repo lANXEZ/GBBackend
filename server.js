@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { createCanvas } = require('canvas'); // <--- The library for drawing
+const { createCanvas } = require('@napi-rs/canvas'); // <--- The library for drawing
 
 const app = express();
 const PORT = process.env.PORT || 3000;
