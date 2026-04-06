@@ -32,6 +32,34 @@ function convertQuery(query) {
 }
 
 // Executes query and maps response to mysql2 format
+const keyMap = {
+  userid: 'UserID', username: 'Username', password: 'Password', firstname: 'FirstName',
+  lastname: 'LastName', dob: 'DoB', status: 'Status', planid: 'PlanID', planname: 'PlanName',
+  type: 'Type', providerid: 'ProviderID', workingdayid: 'WorkingDayID', day: 'Day',
+  exmoveid: 'ExMoveID', steps: 'Steps', description: 'Description', caution: 'Caution',
+  url: 'URL', accessibility: 'Accessibility', recordtype: 'RecordType', progresstype: 'ProgressType',
+  sessionid: 'SessionID', sessiondate: 'SessionDate', userweight: 'UserWeight', userheight: 'UserHeight',
+  prid: 'PRID', trainerid: 'TrainerID',
+  clientid: 'ClientID', dobstring: 'DoBString', exercisename: 'ExerciseName',
+  plan_id: 'plan_id', provider_id: 'provider_id'
+};
+
+function mapKeys(rows) {
+  if (!rows || !Array.isArray(rows)) return rows;
+  return rows.map(row => {
+    const newRow = {};
+    for (let k in row) {
+      const lowerK = k.toLowerCase();
+      if (keyMap[lowerK]) {
+        newRow[keyMap[lowerK]] = row[k];
+      } else {
+        newRow[k] = row[k];
+      }
+    }
+    return newRow;
+  });
+}
+
 async function executeQuery(client_or_pool, queryString, params = []) {
   const isSelect = /^\s*(SELECT|SHOW|DESCRIBE|EXPLAIN)/i.test(queryString);
   let pgQuery = convertQuery(queryString);
@@ -41,15 +69,16 @@ async function executeQuery(client_or_pool, queryString, params = []) {
   }
 
   const commandResult = await client_or_pool.query(pgQuery, params);
-  
+  const mappedRows = mapKeys(commandResult.rows);
+
   if (isSelect) {
-    return [commandResult.rows, commandResult.fields];
+    return [mappedRows, commandResult.fields];
   } else {
     let insertId = 0;
-    if (commandResult.rows && commandResult.rows.length > 0) {
-       const keys = Object.keys(commandResult.rows[0]);
+    if (mappedRows && mappedRows.length > 0) {
+       const keys = Object.keys(mappedRows[0]);
        const idColumn = keys.find(k => /(id)$/i.test(k)) || keys[0];
-       insertId = commandResult.rows[0][idColumn];
+       insertId = mappedRows[0][idColumn];
     }
     const resultObj = {
       affectedRows: commandResult.rowCount,

@@ -707,7 +707,7 @@ app.get('/api/workout-plan', authenticateToken, async (req, res) => {
                 if (!dayEntry) {
                     dayEntry = {
                         working_day_id: row.WorkingDayID,
-                        day: row.Day,
+                        day: (row.Day ?? row.day),
                         exercises: []
                     };
                     plansMap[row.PlanID].days.push(dayEntry);
@@ -777,7 +777,7 @@ app.get('/api/workout-plan/:id', authenticateToken, async (req, res) => {
                 if (!dayEntry) {
                     dayEntry = {
                         working_day_id: row.WorkingDayID,
-                        day: row.Day,
+                        day: (row.Day ?? row.day),
                         exercises: []
                     };
                     plansMap[row.PlanID].days.push(dayEntry);
@@ -969,12 +969,12 @@ app.post('/api/workout-plan/:id/send', authenticateToken, async (req, res) => {
         const plan_name = rows[0].PlanName;
         const daysMap = {};
         rows.forEach(row => {
-            if (row.Day !== null) {
-                if (!daysMap[row.Day]) {
-                    daysMap[row.Day] = [];
+            if ((row.Day ?? row.day) !== null) {
+                if (!daysMap[(row.Day ?? row.day)]) {
+                    daysMap[(row.Day ?? row.day)] = [];
                 }
                 if (row.ExMoveID !== null) {
-                    daysMap[row.Day].push({ ex_move_id: row.ExMoveID });
+                    daysMap[(row.Day ?? row.day)].push({ ex_move_id: row.ExMoveID });
                 }
             }
         });
@@ -1054,7 +1054,7 @@ app.get('/api/workout/is-struggle', authenticateToken, async (req, res) => {
         if (rows.length < 5) return res.status(400).json({ error: "Insufficient Data" });
         
         let totalReps = 0;
-        rows.forEach(r => totalReps += (r.Rep || 0));
+        rows.forEach(r => totalReps += ((r.Rep || r.rep) || 0));
         const avgReps = totalReps / rows.length;
         
         res.status(200).json({ struggling: avgReps < 5 });
@@ -1233,19 +1233,19 @@ app.post('/api/generate-image', authenticateToken, async (req, res) => {
 
         const record = rows[0];
         
-        if (record.Weight == null && record.Rep == null && record.Time == null) {
+        if ((record.Weight || record.weight) == null && (record.Rep || record.rep) == null && (record.Time || record.time) == null) {
             return res.status(400).json({ error: "No record data available to display" });
         }
 
         let mainStat = "";
         let subStat = "";
 
-        if (record.Weight == null && record.Rep == null) {
-            mainStat = `${record.Time}s`;
+        if ((record.Weight || record.weight) == null && (record.Rep || record.rep) == null) {
+            mainStat = `${(record.Time || record.time)}s`;
             subStat = "Time";
         } else {
-            mainStat = record.Weight ? `${record.Weight} kg` : "Bodyweight";
-            subStat = record.Rep ? `Reps: ${record.Rep}` : "";
+            mainStat = (record.Weight || record.weight) ? `${(record.Weight || record.weight)} kg` : "Bodyweight";
+            subStat = (record.Rep || record.rep) ? `Reps: ${(record.Rep || record.rep)}` : "";
         }
 
         const workoutName = record.Description ? record.Description.toUpperCase() : "MY WORKOUT";
@@ -1399,12 +1399,12 @@ app.post('/api/generate-plan-image', authenticateToken, async (req, res) => {
         
         let estimatedRowsLength = 0;
         rows.forEach(row => {
-            if (row.Day !== null) {
-                if (!daysMap[row.Day]) {
-                    daysMap[row.Day] = [];
+            if ((row.Day ?? row.day) !== null) {
+                if (!daysMap[(row.Day ?? row.day)]) {
+                    daysMap[(row.Day ?? row.day)] = [];
                 }
                 if (row.ExerciseName) {
-                    daysMap[row.Day].push(row.ExerciseName);
+                    daysMap[(row.Day ?? row.day)].push(row.ExerciseName);
                     // Approx 25 characters per line at 40px font in ~700px width
                     estimatedRowsLength += Math.ceil((row.ExerciseName.length || 1) / 25);
                 }
