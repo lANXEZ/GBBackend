@@ -14,6 +14,15 @@ CREATE TABLE User (
     Status VARCHAR(20) NOT NULL 
 );
 
+-- TrainingList Table (NEW: Maps Trainers to Clients)
+CREATE TABLE TrainingList (
+    TrainerID BIGINT NOT NULL,
+    ClientID BIGINT NOT NULL,
+    PRIMARY KEY (TrainerID, ClientID),
+    FOREIGN KEY (TrainerID) REFERENCES User(UserID) ON DELETE CASCADE,
+    FOREIGN KEY (ClientID) REFERENCES User(UserID) ON DELETE CASCADE
+);
+
 -- WorkoutPlan Table
 CREATE TABLE WorkoutPlan ( 
     PlanID BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, 
@@ -63,13 +72,15 @@ CREATE TABLE ExerciseList (
     FOREIGN KEY (ExMoveID) REFERENCES ExerciseMoves(ExMoveID) ON DELETE CASCADE
 );
 
--- Session Table
+-- Session Table (UPDATED: Renamed to UserWeight and UserHeight)
 CREATE TABLE Session ( 
     SessionID BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, 
     UserID BIGINT NOT NULL, 
     WorkingDayID BIGINT NOT NULL, 
     ExMoveID BIGINT NOT NULL,
     SessionDate DATE NOT NULL,
+    UserWeight DECIMAL(5,2),
+    UserHeight DECIMAL(5,2),
     FOREIGN KEY (UserID) REFERENCES User(UserID),
     FOREIGN KEY (WorkingDayID) REFERENCES ExerciseList(WorkingDayID),
     FOREIGN KEY (ExMoveID) REFERENCES ExerciseList(ExMoveID)
@@ -92,23 +103,28 @@ CREATE TABLE PersonalRecord (
 
 -- 1. User Table (IDs: 1, 2, 3)
 INSERT INTO User (Username, Password, FirstName, LastName, DoB, Status) VALUES
+('admin', 'admin123', 'Phu', 'JingJing', '2005-06-28', 'admin'),
 ('testgymgoer', 'password', 'John', 'Doe', '1995-05-15', 'user'),
 ('testtrainer', 'password', 'Somchai', 'Trainer', '1990-10-12', 'trainer'),
 ('testclient', 'password', 'Jane', 'Client', '2002-02-20', 'training client');
 
--- 2. WorkoutPlan Table (IDs: 1, 2, 3)
+-- 2. TrainingList Table (NEW: ID 2 is trainer, ID 3 is client)
+INSERT INTO TrainingList (TrainerID, ClientID) VALUES
+(2, 3);
+
+-- 3. WorkoutPlan Table (IDs: 1, 2, 3)
 INSERT INTO WorkoutPlan (UserID, PlanName, Type, ProviderID) VALUES
-(1,' Plan A' , 'C', NULL), 
-(2,' Plan B', 'C', NULL), 
+(1,' Plan A' , 'C', 1), 
+(2,' Plan B', 'C', 2), 
 (3,' Plan C', 'P', 2); 
 
--- 3. WorkingDay Table (IDs: 1, 2, 3)
+-- 4. WorkingDay Table (IDs: 1, 2, 3)
 INSERT INTO WorkingDay (Day) VALUES
 (0), -- Monday
 (2), -- Wednesday
 (4); -- Friday
 
--- 4. ExerciseMoves Table (IDs: 1, 2, 3, 4, 5)
+-- 5. ExerciseMoves Table (IDs: 1, 2, 3, 4, 5)
 INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType) VALUES
 ('1. Grab campus rung. 2. Pull up dynamically.', 'Campus Board Lache', 'Warm up shoulders.', NULL, 'public', NULL, 'rep', 'increase'),
 ('1. Hang from bar. 2. Pull chin over bar.', 'Standard Pull-up', NULL, NULL, 'public', NULL, 'rep', 'increase'),
@@ -116,14 +132,14 @@ INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, User
 ('1. Unrack bar. 2. Lower to chest. 3. Press up.', 'Barbell Bench Press', 'Use a spotter for heavy sets.', NULL, 'public', NULL, 'weight', 'increase'),
 ('1. Rest bar on traps. 2. Squat down. 3. Stand up.', 'Barbell Squat', 'Maintain neutral spine.', NULL, 'public', NULL, 'weight', 'increase');
 
--- 5. WorkoutRoutine Table 
+-- 6. WorkoutRoutine Table 
 INSERT INTO WorkoutRoutine (PlanID, WorkingDayID) VALUES
 (1, 1),
 (1, 2),
 (2, 3),
 (3, 1);
 
--- 6. ExerciseList Table 
+-- 7. ExerciseList Table 
 -- Adding Bench Press (4) and Squats (5) to Working Day 1 to allow high-volume sets
 INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES
 (1, 1), -- Day 1: Lache
@@ -133,89 +149,77 @@ INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES
 (2, 3), -- Day 2: Plank
 (3, 2); -- Day 3: Pull-up
 
--- 7. Session Table (IDs: 1 to 6)
--- A "Session" is one exercise move performed by a user on a specific day
-INSERT INTO Session (UserID, WorkingDayID, ExMoveID, SessionDate) VALUES
-(1, 1, 1, '2026-03-16'), -- Session 1: John doing Campus Board Laches
-(1, 1, 2, '2026-03-16'), -- Session 2: John doing Pull-ups
-(3, 1, 2, '2026-03-14'), -- Session 3: Jane doing Pull-ups
-(1, 2, 3, '2026-03-18'), -- Session 4: John doing Planks
-(1, 1, 4, '2026-03-16'), -- Session 5: John doing Bench Press
-(1, 1, 5, '2026-03-16'); -- Session 6: John doing Squats
+-- 8. Session Table (UPDATED: Using UserWeight and UserHeight)
+INSERT INTO Session (UserID, WorkingDayID, ExMoveID, SessionDate, UserWeight, UserHeight) VALUES
+(1, 1, 1, '2026-03-16', 82.50, 180.00), -- Session 1: John doing Campus Board Laches
+(1, 1, 2, '2026-03-16', 82.50, 180.00), -- Session 2: John doing Pull-ups
+(3, 1, 2, '2026-03-14', 62.00, 165.00), -- Session 3: Jane doing Pull-ups
+(1, 2, 3, '2026-03-18', 82.50, 180.00), -- Session 4: John doing Planks
+(1, 1, 4, '2026-03-16', 82.50, 180.00), -- Session 5: John doing Bench Press
+(1, 1, 5, '2026-03-16', 82.50, 180.00); -- Session 6: John doing Squats
 
--- 8. PersonalRecord Table (The Sets for each Session)
--- Demonstrating that 1 Session = Many Sets (PersonalRecords)
+-- 9. PersonalRecord Table (The Sets for each Session)
 INSERT INTO PersonalRecord (SessionID, Weight, Rep, Time) VALUES
-
 -- ======= SESSION 5: BENCH PRESS (John, Day 1) =======
--- Demonstrating a heavy 8-set routine (warmups, working sets, PR attempt, drop set)
-(5, 20.00, 15, NULL),  -- Set 1: Empty bar warmup
-(5, 40.00, 10, NULL),  -- Set 2: Light warmup
-(5, 60.00,  8, NULL),  -- Set 3: Moderate
-(5, 80.00,  5, NULL),  -- Set 4: Working set
-(5, 85.00,  5, NULL),  -- Set 5: Working set
-(5, 90.00,  3, NULL),  -- Set 6: Heavy set
-(5, 95.00,  1, NULL),  -- Set 7: 1-Rep Max attempt!
-(5, 60.00, 12, NULL),  -- Set 8: Drop set / burnout
+(5, 20.00, 15, NULL),  
+(5, 40.00, 10, NULL),  
+(5, 60.00,  8, NULL),  
+(5, 80.00,  5, NULL),  
+(5, 85.00,  5, NULL),  
+(5, 90.00,  3, NULL),  
+(5, 95.00,  1, NULL),  
+(5, 60.00, 12, NULL),  
 
 -- ======= SESSION 6: SQUATS (John, Day 1) =======
--- Demonstrating a classic 5-set working routine after 2 warmups
-(6, 20.00, 10, NULL),  -- Set 1: Empty bar warmup
-(6, 60.00,  8, NULL),  -- Set 2: Warmup
-(6, 80.00,  5, NULL),  -- Set 3: Working set 1
-(6, 80.00,  5, NULL),  -- Set 4: Working set 2
-(6, 80.00,  5, NULL),  -- Set 5: Working set 3
-(6, 80.00,  5, NULL),  -- Set 6: Working set 4
-(6, 80.00,  5, NULL),  -- Set 7: Working set 5
+(6, 20.00, 10, NULL),  
+(6, 60.00,  8, NULL),  
+(6, 80.00,  5, NULL),  
+(6, 80.00,  5, NULL),  
+(6, 80.00,  5, NULL),  
+(6, 80.00,  5, NULL),  
+(6, 80.00,  5, NULL),  
 
 -- ======= SESSION 2: WEIGHTED PULL-UPS (John, Day 1) =======
--- Progressive overload on weighted pull-ups
-(2, NULL,  12, NULL),  -- Set 1: Bodyweight only
-(2, 5.00,  10, NULL),  -- Set 2: 5kg added
-(2, 10.00,  8, NULL),  -- Set 3: 10kg added
-(2, 15.00,  5, NULL),  -- Set 4: 15kg added
-(2, 20.00,  3, NULL),  -- Set 5: 20kg added (Heavy)
+(2, NULL,  12, NULL),  
+(2, 5.00,  10, NULL),  
+(2, 10.00,  8, NULL),  
+(2, 15.00,  5, NULL),  
+(2, 20.00,  3, NULL),  
 
 -- ======= SESSION 4: CORE PLANKS (John, Day 2) =======
--- Time-based session (4 sets, decreasing duration as fatigue sets in)
-(4, NULL, NULL, 120),  -- Set 1: 2 minutes
-(4, NULL, NULL, 90),   -- Set 2: 1.5 minutes
-(4, NULL, NULL, 60),   -- Set 3: 1 minute
-(4, NULL, NULL, 45),   -- Set 4: 45 seconds
+(4, NULL, NULL, 120),  
+(4, NULL, NULL, 90),   
+(4, NULL, NULL, 60),   
+(4, NULL, NULL, 45),   
 
 -- ======= SESSION 1: CAMPUS BOARD (John, Day 1) =======
--- Rep-based explosive work
-(1, NULL, 8, NULL),    -- Set 1
-(1, NULL, 8, NULL),    -- Set 2
-(1, NULL, 6, NULL),    -- Set 3 (Fatigue)
+(1, NULL, 8, NULL),    
+(1, NULL, 8, NULL),    
+(1, NULL, 6, NULL),    
 
 -- ======= SESSION 3: PULL-UPS (Jane, Day 1) =======
--- Beginner working on volume
-(3, NULL, 5, NULL),    -- Set 1
-(3, NULL, 4, NULL),    -- Set 2
-(3, NULL, 3, NULL),    -- Set 3
-(3, NULL, 3, NULL);    -- Set 4
+(3, NULL, 5, NULL),    
+(3, NULL, 4, NULL),    
+(3, NULL, 3, NULL),    
+(3, NULL, 3, NULL);    
 
 -- --------------------------------------------------------
 -- ADDITIONAL MOCK DATA INSERTS
 -- --------------------------------------------------------
 
--- 2. WorkoutPlan Table (Adding IDs: 4, 5, 6)
--- Creating a standard Push, Pull, Legs split for User 1 (John)
+-- 10. WorkoutPlan Table (Adding IDs: 4, 5, 6)
 INSERT INTO WorkoutPlan (UserID, PlanName, Type, ProviderID) VALUES
-(1, 'Push Day Routine', 'C', NULL),
-(1, 'Pull Day Routine', 'C', NULL),
-(1, 'Leg Day Routine', 'C', NULL);
+(1, 'Push Day Routine', 'C', 1),
+(1, 'Pull Day Routine', 'C', 1),
+(1, 'Leg Day Routine', 'C', 1);
 
--- 3. WorkingDay Table (Adding IDs: 4, 5, 6)
--- 0=Monday, 1=Tuesday, 2=Wednesday, 3=Thursday, 4=Friday, 5=Saturday, 6=Sunday
+-- 11. WorkingDay Table (Adding IDs: 4, 5, 6)
 INSERT INTO WorkingDay (Day) VALUES
 (1), -- Tuesday (WorkingDayID = 4)
 (3), -- Thursday (WorkingDayID = 5)
 (5); -- Saturday (WorkingDayID = 6)
 
--- 4. ExerciseMoves Table (Adding IDs: 6 to 12)
--- Adding classic gym exercises for the PPL split
+-- 12. ExerciseMoves Table (Adding IDs: 6 to 12)
 INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType) VALUES
 ('1. Hinge at hips. 2. Grip bar. 3. Stand up straight with bar.', 'Barbell Deadlift', 'Keep back flat to avoid injury.', NULL, 'public', NULL, 'weight', 'increase'),
 ('1. Sit at machine. 2. Grab wide bar. 3. Pull down to upper chest.', 'Lat Pulldown', 'Do not lean back too far.', NULL, 'public', NULL, 'weight', 'increase'),
@@ -225,109 +229,103 @@ INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, User
 ('1. Sit in machine. 2. Place feet on platform. 3. Press weight up.', 'Machine Leg Press', 'Do not lock out knees entirely.', NULL, 'public', NULL, 'weight', 'increase'),
 ('1. Step forward. 2. Lower hips until both knees are bent at 90 degrees.', 'Dumbbell Walking Lunges', 'Keep front knee behind toes.', NULL, 'public', NULL, 'weight', 'increase');
 
--- 5. WorkoutRoutine Table 
--- Mapping the Plans to the specific days in the week
+-- 13. WorkoutRoutine Table 
 INSERT INTO WorkoutRoutine (PlanID, WorkingDayID) VALUES
-(4, 4), -- Plan 4 (Push Day) maps to WorkingDayID 4 (Tuesday)
-(5, 5), -- Plan 5 (Pull Day) maps to WorkingDayID 5 (Thursday)
-(6, 6); -- Plan 6 (Leg Day) maps to WorkingDayID 6 (Saturday)
+(4, 4), 
+(5, 5), 
+(6, 6); 
 
--- 6. ExerciseList Table 
--- Defining which exercises happen on which WorkingDay
+-- 14. ExerciseList Table 
 INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES
 -- PUSH DAY (WorkingDayID 4: Tuesday)
-(4, 4),  -- Bench Press (Existing ID 4)
-(4, 9),  -- Overhead Shoulder Press (New ID 9)
-(4, 10), -- Tricep Rope Pushdown (New ID 10)
+(4, 4),  
+(4, 9),  
+(4, 10), 
 
 -- PULL DAY (WorkingDayID 5: Thursday)
-(5, 2),  -- Standard Pull-up (Existing ID 2)
-(5, 7),  -- Lat Pulldown (New ID 7)
-(5, 8),  -- Dumbbell Bicep Curl (New ID 8)
+(5, 2),  
+(5, 7),  
+(5, 8),  
 
 -- LEG DAY (WorkingDayID 6: Saturday)
-(6, 5),  -- Barbell Squat (Existing ID 5)
-(6, 6),  -- Barbell Deadlift (New ID 6)
-(6, 11), -- Machine Leg Press (New ID 11)
-(6, 12); -- Dumbbell Walking Lunges (New ID 12)
+(6, 5),  
+(6, 6),  
+(6, 11), 
+(6, 12); 
 
--- 7. Session Table (Adding IDs: 7 to 16)
--- Logging John's sessions for his new PPL routine
-INSERT INTO Session (UserID, WorkingDayID, ExMoveID, SessionDate) VALUES
+-- 15. Session Table (UPDATED: Adding IDs: 7 to 16, Using UserWeight and UserHeight)
+INSERT INTO Session (UserID, WorkingDayID, ExMoveID, SessionDate, UserWeight, UserHeight) VALUES
 -- Push Day Sessions (March 17, Tuesday)
-(1, 4, 4, '2026-03-17'),  -- Session 7: Bench Press
-(1, 4, 9, '2026-03-17'),  -- Session 8: Overhead Press
-(1, 4, 10, '2026-03-17'), -- Session 9: Tricep Pushdown
+(1, 4, 4, '2026-03-17', 82.50, 180.00),  -- Session 7: Bench Press
+(1, 4, 9, '2026-03-17', 82.50, 180.00),  -- Session 8: Overhead Press
+(1, 4, 10, '2026-03-17', 82.50, 180.00), -- Session 9: Tricep Pushdown
 
 -- Pull Day Sessions (March 19, Thursday)
-(1, 5, 2, '2026-03-19'),  -- Session 10: Pull-up
-(1, 5, 7, '2026-03-19'),  -- Session 11: Lat Pulldown
-(1, 5, 8, '2026-03-19'),  -- Session 12: Bicep Curl
+(1, 5, 2, '2026-03-19', 82.50, 180.00),  -- Session 10: Pull-up
+(1, 5, 7, '2026-03-19', 82.50, 180.00),  -- Session 11: Lat Pulldown
+(1, 5, 8, '2026-03-19', 82.50, 180.00),  -- Session 12: Bicep Curl
 
 -- Leg Day Sessions (March 21, Saturday)
-(1, 6, 5, '2026-03-21'),  -- Session 13: Barbell Squat
-(1, 6, 6, '2026-03-21'),  -- Session 14: Barbell Deadlift
-(1, 6, 11, '2026-03-21'), -- Session 15: Leg Press
-(1, 6, 12, '2026-03-21'); -- Session 16: Lunges
+(1, 6, 5, '2026-03-21', 82.50, 180.00),  -- Session 13: Barbell Squat
+(1, 6, 6, '2026-03-21', 82.50, 180.00),  -- Session 14: Barbell Deadlift
+(1, 6, 11, '2026-03-21', 82.50, 180.00), -- Session 15: Leg Press
+(1, 6, 12, '2026-03-21', 82.50, 180.00); -- Session 16: Lunges
 
--- 8. PersonalRecord Table (Adding sets for the new sessions)
+-- 16. PersonalRecord Table (Adding sets for the new sessions)
 INSERT INTO PersonalRecord (SessionID, Weight, Rep, Time) VALUES
 -- ======= SESSION 8: OVERHEAD PRESS (John, Push Day) =======
-(8, 20.00, 10, NULL), -- Warmup
-(8, 40.00,  8, NULL), -- Working set 1
-(8, 40.00,  8, NULL), -- Working set 2
-(8, 45.00,  6, NULL), -- Heavy set
+(8, 20.00, 10, NULL),
+(8, 40.00,  8, NULL),
+(8, 40.00,  8, NULL),
+(8, 45.00,  6, NULL),
 
 -- ======= SESSION 9: TRICEP PUSHDOWN (John, Push Day) =======
-(9, 15.00, 12, NULL), -- Working set 1
-(9, 20.00, 10, NULL), -- Working set 2
-(9, 20.00, 10, NULL), -- Working set 3
-(9, 25.00,  8, NULL), -- Heavy set
+(9, 15.00, 12, NULL),
+(9, 20.00, 10, NULL),
+(9, 20.00, 10, NULL),
+(9, 25.00,  8, NULL),
 
 -- ======= SESSION 11: LAT PULLDOWN (John, Pull Day) =======
-(11, 40.00, 12, NULL), -- Warmup
-(11, 55.00, 10, NULL), -- Working set 1
-(11, 60.00,  8, NULL), -- Working set 2
-(11, 65.00,  6, NULL), -- Heavy set
+(11, 40.00, 12, NULL),
+(11, 55.00, 10, NULL),
+(11, 60.00,  8, NULL),
+(11, 65.00,  6, NULL),
 
 -- ======= SESSION 12: DUMBBELL BICEP CURL (John, Pull Day) =======
-(12, 12.50, 10, NULL), -- Working set 1
-(12, 12.50, 10, NULL), -- Working set 2
-(12, 15.00,  8, NULL), -- Working set 3
+(12, 12.50, 10, NULL),
+(12, 12.50, 10, NULL),
+(12, 15.00,  8, NULL),
 
 -- ======= SESSION 14: BARBELL DEADLIFT (John, Leg Day) =======
-(14, 60.00,  8, NULL), -- Warmup
-(14, 80.00,  5, NULL), -- Working set 1
-(14, 100.00, 5, NULL), -- Working set 2
-(14, 120.00, 3, NULL), -- Heavy set
-(14, 130.00, 1, NULL), -- PR attempt
+(14, 60.00,  8, NULL),
+(14, 80.00,  5, NULL),
+(14, 100.00, 5, NULL),
+(14, 120.00, 3, NULL),
+(14, 130.00, 1, NULL),
 
 -- ======= SESSION 15: LEG PRESS (John, Leg Day) =======
-(15, 100.00, 12, NULL), -- Working set 1
-(15, 150.00, 10, NULL), -- Working set 2
-(15, 180.00,  8, NULL), -- Working set 3
+(15, 100.00, 12, NULL),
+(15, 150.00, 10, NULL),
+(15, 180.00,  8, NULL),
 
 -- ======= SESSION 16: WALKING LUNGES (John, Leg Day) =======
-(16, 15.00, 20, NULL), -- 10 reps per leg, Working set 1
-(16, 20.00, 20, NULL), -- 10 reps per leg, Working set 2
-(16, 20.00, 20, NULL); -- 10 reps per leg, Working set 3
+(16, 15.00, 20, NULL),
+(16, 20.00, 20, NULL),
+(16, 20.00, 20, NULL);
 
 -- --------------------------------------------------------
 -- ADDITIONAL MOCK DATA INSERTS (USERS 2 & 3)
 -- --------------------------------------------------------
 
--- 2. WorkoutPlan Table (Adding ID: 7)
--- Somchai (Trainer) gets his own advanced workout plan
+-- 17. WorkoutPlan Table (Adding ID: 7)
 INSERT INTO WorkoutPlan (UserID, PlanName, Type, ProviderID) VALUES
-(2, 'Trainer Advanced Conditioning', 'C', NULL);
+(2, 'Trainer Advanced Conditioning', 'C', 2);
 
--- 3. WorkingDay Table (Adding ID: 7)
--- Adding Sunday (Day 6) for Somchai's advanced routine
+-- 18. WorkingDay Table (Adding ID: 7)
 INSERT INTO WorkingDay (Day) VALUES
 (6); -- Sunday (WorkingDayID = 7)
 
--- 4. ExerciseMoves Table (Adding IDs: 13 to 17)
--- Adding a mix of advanced movements (for the trainer) and functional movements (for the client)
+-- 19. ExerciseMoves Table (Adding IDs: 13 to 17)
 INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType) VALUES
 ('1. Grip rings. 2. Pull up explosively. 3. Transition shoulders over rings. 4. Dip.', 'Ring Muscle-up', 'Requires significant shoulder mobility.', NULL, 'public', NULL, 'rep', 'increase'),
 ('1. Hinge to grip bar. 2. Explosively extend hips. 3. Catch bar on shoulders.', 'Barbell Power Clean', 'Keep bar path close to body.', NULL, 'public', NULL, 'weight', 'increase'),
@@ -335,91 +333,88 @@ INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, User
 ('1. Hold heavy dumbbells in each hand. 2. Walk a set distance.', 'Farmer''s Walk', 'Maintain upright posture.', NULL, 'public', NULL, 'time', 'increase'),
 ('1. Stand facing box. 2. Swing arms back. 3. Jump and land softly on box.', 'Plyometric Box Jumps', 'Step down carefully, do not jump backward.', NULL, 'public', NULL, 'rep', 'increase');
 
--- 5. WorkoutRoutine Table
--- Mapping Somchai's new plan, and expanding Jane's existing Plan C (PlanID 3)
+-- 20. WorkoutRoutine Table
 INSERT INTO WorkoutRoutine (PlanID, WorkingDayID) VALUES
-(7, 7), -- Somchai's Plan 7 maps to WorkingDay 7 (Sunday)
-(3, 2), -- Jane's Plan 3 maps to WorkingDay 2 (Wednesday)
-(3, 3); -- Jane's Plan 3 maps to WorkingDay 3 (Friday)
+(7, 7), 
+(3, 2), 
+(3, 3); 
 
--- 6. ExerciseList Table
--- Defining the exercises for Somchai's Sunday and Jane's Wed/Fri
+-- 21. ExerciseList Table
 INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES
 -- SOMCHAI'S ADVANCED SUNDAY (WorkingDayID 7)
-(7, 13), -- Ring Muscle-up (New ID 13)
-(7, 14), -- Power Clean (New ID 14)
-(7, 5),  -- Barbell Squat (Existing ID 5)
+(7, 13), 
+(7, 14), 
+(7, 5),  
 
 -- JANE'S WEDNESDAY (WorkingDayID 2)
-(2, 15), -- Dumbbell Row (New ID 15)
-(2, 16), -- Farmer's Walk (New ID 16)
+(2, 15), 
+(2, 16), 
 
 -- JANE'S FRIDAY (WorkingDayID 3)
-(3, 17), -- Box Jumps (New ID 17)
-(3, 12), -- Walking Lunges (Existing ID 12)
-(3, 7);  -- Lat Pulldown (Existing ID 7)
+(3, 17), 
+(3, 12), 
+(3, 7);  
 
--- 7. Session Table (Adding IDs: 17 to 25)
-INSERT INTO Session (UserID, WorkingDayID, ExMoveID, SessionDate) VALUES
+-- 22. Session Table (UPDATED: Adding IDs: 17 to 25, Using UserWeight and UserHeight)
+INSERT INTO Session (UserID, WorkingDayID, ExMoveID, SessionDate, UserWeight, UserHeight) VALUES
 -- Somchai's Sessions (March 22, Sunday)
-(2, 7, 13, '2026-03-22'), -- Session 17: Muscle-ups
-(2, 7, 14, '2026-03-22'), -- Session 18: Power Clean
-(2, 7, 5,  '2026-03-22'), -- Session 19: Squats
+(2, 7, 13, '2026-03-22', 88.00, 178.50), -- Session 17: Muscle-ups
+(2, 7, 14, '2026-03-22', 88.00, 178.50), -- Session 18: Power Clean
+(2, 7, 5,  '2026-03-22', 88.00, 178.50), -- Session 19: Squats
 
 -- Jane's Sessions (March 18, Wednesday)
-(3, 2, 15, '2026-03-18'), -- Session 20: Dumbbell Row
-(3, 2, 16, '2026-03-18'), -- Session 21: Farmer's Walk
-(3, 2, 3,  '2026-03-18'), -- Session 22: Core Plank
+(3, 2, 15, '2026-03-18', 62.00, 165.00), -- Session 20: Dumbbell Row
+(3, 2, 16, '2026-03-18', 62.00, 165.00), -- Session 21: Farmer's Walk
+(3, 2, 3,  '2026-03-18', 62.00, 165.00), -- Session 22: Core Plank
 
 -- Jane's Sessions (March 20, Friday)
-(3, 3, 17, '2026-03-20'), -- Session 23: Box Jumps
-(3, 3, 12, '2026-03-20'), -- Session 24: Lunges
-(3, 3, 7,  '2026-03-20'); -- Session 25: Lat Pulldown
+(3, 3, 17, '2026-03-20', 62.00, 165.00), -- Session 23: Box Jumps
+(3, 3, 12, '2026-03-20', 62.00, 165.00), -- Session 24: Lunges
+(3, 3, 7,  '2026-03-20', 62.00, 165.00); -- Session 25: Lat Pulldown
 
--- 8. PersonalRecord Table (Logging the sets for Users 2 & 3)
+-- 23. PersonalRecord Table (Logging the sets for Users 2 & 3)
 INSERT INTO PersonalRecord (SessionID, Weight, Rep, Time) VALUES
 -- ======= SESSION 17: RING MUSCLE-UPS (Somchai, Advanced) =======
-(17, NULL, 5, NULL),  -- Working set 1
-(17, NULL, 5, NULL),  -- Working set 2
-(17, NULL, 4, NULL),  -- Fatigue set
+(17, NULL, 5, NULL),
+(17, NULL, 5, NULL),
+(17, NULL, 4, NULL),
 
 -- ======= SESSION 18: POWER CLEAN (Somchai, Advanced) =======
-(18, 40.00,  8, NULL), -- Warmup
-(18, 60.00,  5, NULL), -- Working set 1
-(18, 80.00,  3, NULL), -- Working set 2
-(18, 90.00,  2, NULL), -- Heavy set
+(18, 40.00,  8, NULL),
+(18, 60.00,  5, NULL),
+(18, 80.00,  3, NULL),
+(18, 90.00,  2, NULL),
 
 -- ======= SESSION 19: BARBELL SQUATS (Somchai, Advanced) =======
-(19, 100.00, 8, NULL), -- Working set 1
-(19, 120.00, 5, NULL), -- Working set 2
-(19, 140.00, 3, NULL), -- Heavy set
+(19, 100.00, 8, NULL),
+(19, 120.00, 5, NULL),
+(19, 140.00, 3, NULL),
 
 -- ======= SESSION 20: DUMBBELL ROW (Jane, Client) =======
-(20, 10.00, 12, NULL), -- Working set 1 (per arm)
-(20, 12.50, 10, NULL), -- Working set 2 (per arm)
-(20, 12.50, 10, NULL), -- Working set 3 (per arm)
+(20, 10.00, 12, NULL),
+(20, 12.50, 10, NULL),
+(20, 12.50, 10, NULL),
 
 -- ======= SESSION 21: FARMER'S WALK (Jane, Client) =======
--- Weight is per hand, Time is in seconds
-(21, 15.00, NULL, 60), -- 60 seconds carry
-(21, 15.00, NULL, 60), -- 60 seconds carry
-(21, 20.00, NULL, 45), -- Heavier, 45 seconds carry
+(21, 15.00, NULL, 60),
+(21, 15.00, NULL, 60),
+(21, 20.00, NULL, 45),
 
 -- ======= SESSION 22: CORE PLANK (Jane, Client) =======
-(22, NULL, NULL, 60),  -- 1 minute
-(22, NULL, NULL, 60),  -- 1 minute
-(22, NULL, NULL, 45),  -- 45 seconds
+(22, NULL, NULL, 60),
+(22, NULL, NULL, 60),
+(22, NULL, NULL, 45),
 
 -- ======= SESSION 23: BOX JUMPS (Jane, Client) =======
-(23, NULL, 10, NULL),  -- Working set 1
-(23, NULL, 10, NULL),  -- Working set 2
-(23, NULL,  8, NULL),  -- Working set 3
+(23, NULL, 10, NULL),
+(23, NULL, 10, NULL),
+(23, NULL,  8, NULL),
 
 -- ======= SESSION 24: WALKING LUNGES (Jane, Client) =======
-(24, 10.00, 20, NULL), -- 10 reps per leg
-(24, 10.00, 20, NULL), -- 10 reps per leg
+(24, 10.00, 20, NULL),
+(24, 10.00, 20, NULL),
 
 -- ======= SESSION 25: LAT PULLDOWN (Jane, Client) =======
-(25, 25.00, 15, NULL), -- Light warmup
-(25, 35.00, 12, NULL), -- Working set 1
-(25, 40.00, 10, NULL); -- Working set 2
+(25, 25.00, 15, NULL),
+(25, 35.00, 12, NULL),
+(25, 40.00, 10, NULL);

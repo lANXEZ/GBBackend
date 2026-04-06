@@ -1,7 +1,7 @@
 const fs = require('fs');
 let s = fs.readFileSync('e:/Work/VSCode Repo/GBBackend/db.js', 'utf8');
 
-const mapFn = \
+const mapFn = `
 const keyMap = {
   userid: 'UserID', username: 'Username', password: 'Password', firstname: 'FirstName',
   lastname: 'LastName', dob: 'DoB', status: 'Status', planid: 'PlanID', planname: 'PlanName',
@@ -28,7 +28,7 @@ function mapKeys(rows) {
     return newRow;
   });
 }
-\;
+`;
 
 if (!s.includes('function mapKeys(rows)')) {
   s = s.replace('// Executes query and maps response to mysql2 format', mapFn + '\\n// Executes query and maps response to mysql2 format');

@@ -679,7 +679,7 @@ app.post('/api/workout-plan/auto-generate', authenticateToken, async (req, res) 
                     
                     const [newExRes] = await conn.query(
                         'INSERT INTO ExerciseMoves (Steps, Description, Caution, Accessibility, UserID, RecordType, ProgressType) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                        [ex.steps, ex.description, caution, 'private', req.user.id, recType, progType]
+                        [ex.steps, ex.description, caution, 'public', req.user.id, recType, progType]
                     );
                     currentExId = newExRes.insertId;
                 }
