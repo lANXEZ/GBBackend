@@ -1545,6 +1545,11 @@ app.post('/api/generate-plan-image', authenticateToken, async (req, res) => {
     }
 });
 
+// Health check endpoint for the root URL
+app.get('/', (req, res) => {
+    res.status(200).json({ message: "Gym Buddy Backend is running successfully!" });
+});
+
 if (process.env.NODE_ENV !== 'production') {
     app.listen(PORT, () => {
         console.log(`Server is running on http://localhost:${PORT}`);
