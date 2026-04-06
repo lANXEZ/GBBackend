@@ -240,6 +240,23 @@ app.post('/api/coach/invite', authenticateToken, async (req, res) => {
     }
 });
 
+app.delete('/api/coach/client/:id', authenticateToken, async (req, res) => {
+    try {
+        const client_id = req.params.id;
+        
+        const [result] = await db.query('DELETE FROM traininglist WHERE TrainerID = ? AND ClientID = ?', [req.user.id, client_id]);
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "Client not found in your training list" });
+        }
+        
+        res.status(200).json({ message: "Client removed successfully" });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to remove client" });
+    }
+});
+
 app.post('/api/workout/create-exercise', authenticateToken, async (req, res) => {
     try {
         const { steps, description, caution, url, accessibility, record_type, progress_type } = req.body;
@@ -317,20 +334,38 @@ app.delete('/api/workout/exercise/:id', authenticateToken, async (req, res) => {
 
 app.post('/api/workout/save', authenticateToken, async (req, res) => {
     try {
-        const { workout_type, weight, reps, date, time, UserWeight, UserHeight } = req.body;
+        const { workout_type, weight, reps, date, time, UserWeight, UserHeight, ex_move_id } = req.body;
         
         // Find Exercise Moves ID (assuming workout_type matches Description loosely)
-        const [exRows] = await db.query('SELECT ExMoveID FROM ExerciseMoves WHERE Description = ? LIMIT 1', [workout_type]);
-        let exMoveID = exRows.length > 0 ? exRows[0].ExMoveID : 1; // Default to 1 if not found
+        let exMoveID = ex_move_id;
+        if (!exMoveID) {
+            const [exRows] = await db.query('SELECT ExMoveID FROM ExerciseMoves WHERE Description = ? LIMIT 1', [workout_type]);
+            exMoveID = exRows.length > 0 ? exRows[0].ExMoveID : 1; // Default to 1 if not found
+        }
         
         // Calculate WorkingDayID based on date (0-6 mapping in DB schema is Mon-Sun)
         const d = date ? new Date(date) : new Date();
-        let dayOfWeek = d.getDay(); // 0 is Sunday, 1 is Monday ... 6 is Saturday
-        // Map JS getDay (Sun=0, Mon=1) to DB Day (schema implies 0=Monday, wait, schema comment says "0-6 representing Monday-Sunday")
+        let dayOfWeek = d.getDay(); 
         let dbDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
         
-        const [dayRows] = await db.query('SELECT WorkingDayID FROM WorkingDay WHERE Day = ? LIMIT 1', [dbDay]);
-        let workingDayID = dayRows.length > 0 ? dayRows[0].WorkingDayID : 1; // Default to 1
+        // Find a VALID WorkingDayID from ExerciseList to satisfy the foreign key constraint
+        let workingDayID;
+        const [validDayRows] = await db.query(`
+            SELECT el.WorkingDayID 
+            FROM ExerciseList el
+            JOIN WorkingDay w ON el.WorkingDayID = w.WorkingDayID
+            WHERE w.Day = ? AND el.ExMoveID = ?
+            LIMIT 1
+        `, [dbDay, exMoveID]);
+
+        if (validDayRows.length > 0) {
+            workingDayID = validDayRows[0].WorkingDayID;
+        } else {
+            // WE MUST CREATE A DUMMY LINK TO SATISFY FOREIGN KEY if none exists!
+            const [newDay] = await db.query('INSERT INTO WorkingDay (Day) VALUES (?)', [dbDay]);
+            workingDayID = newDay.insertId;
+            await db.query('INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES (?, ?)', [workingDayID, exMoveID]);
+        }
 
         // Check if Session already exists today for this User and Exercise
         const sessionDateStr = d.toISOString().split('T')[0];
@@ -509,7 +544,7 @@ app.post('/api/workout-plan/create', authenticateToken, async (req, res) => {
             // Add exercises to ExerciseList for this WorkingDay
             for (const ex of exercises) {
                 await conn.query(
-                    'INSERT IGNORE INTO ExerciseList (WorkingDayID, ExMoveID) VALUES (?, ?)',
+                    'INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES (?, ?) ON CONFLICT DO NOTHING',
                     [workingDayID, ex.ex_move_id]
                 );
             }
@@ -650,7 +685,7 @@ app.post('/api/workout-plan/auto-generate', authenticateToken, async (req, res) 
                 }
 
                 if (currentExId) {
-                    await conn.query('INSERT IGNORE INTO ExerciseList (WorkingDayID, ExMoveID) VALUES (?, ?)', [workingDayID, currentExId]);
+                    await conn.query('INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES (?, ?) ON CONFLICT DO NOTHING', [workingDayID, currentExId]);
                 }
             }
         }
@@ -873,7 +908,7 @@ app.put('/api/workout-plan/:id', authenticateToken, async (req, res) => {
             await conn.query('INSERT INTO WorkoutRoutine (PlanID, WorkingDayID) VALUES (?, ?)', [planID, workingDayID]);
 
             for (const ex of exercises) {
-                await conn.query('INSERT IGNORE INTO ExerciseList (WorkingDayID, ExMoveID) VALUES (?, ?)', [workingDayID, ex.ex_move_id]);
+                await conn.query('INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES (?, ?) ON CONFLICT DO NOTHING', [workingDayID, ex.ex_move_id]);
             }
         }
 
@@ -1007,7 +1042,7 @@ app.post('/api/workout-plan/:id/send', authenticateToken, async (req, res) => {
             await conn.query('INSERT INTO WorkoutRoutine (PlanID, WorkingDayID) VALUES (?, ?)', [newPlanID, workingDayID]);
             
             for (const ex of exercises) {
-                await conn.query('INSERT IGNORE INTO ExerciseList (WorkingDayID, ExMoveID) VALUES (?, ?)', [workingDayID, ex.ex_move_id]);
+                await conn.query('INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES (?, ?) ON CONFLICT DO NOTHING', [workingDayID, ex.ex_move_id]);
             }
         }
         

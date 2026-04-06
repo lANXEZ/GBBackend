@@ -1,0 +1,1 @@
+const fs = require('fs'); const file = fs.readFileSync('e:/Work/VSCode Repo/GBBackend/server.js', 'utf8'); const start = file.indexOf('app.get(\\'/api/workout/fetch\\')'); const end = file.indexOf('app.get(\\'/api/workout/recent-body-stats\\')'); console.log(file.substring(start, end));

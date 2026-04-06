@@ -1,0 +1,12 @@
+const fs = require('fs');
+let s = fs.readFileSync('server.js', 'utf8');
+s = s.replace(/wp\.PlanID,/g, 'wp.PlanID AS "PlanID",');
+s = s.replace(/wp\.PlanName,/g, 'wp.PlanName AS "PlanName",');
+s = s.replace(/wp\.ProviderID,/g, 'wp.ProviderID AS "ProviderID",');
+s = s.replace(/wp\.UserID,/g, 'wp.UserID AS "UserID",');
+s = s.replace(/wp\.Type,/g, 'wp.Type AS "Type",');
+s = s.replace(/wr\.WorkingDayID,/g, 'wr.WorkingDayID AS "WorkingDayID",');
+s = s.replace(/d\.Day,/g, 'd.Day AS "Day",');
+s = s.replace(/em\.ExMoveID,/g, 'em.ExMoveID AS "ExMoveID",');
+s = s.replace(/em\.Description AS ExerciseName/g, 'em.Description AS "ExerciseName"');
+fs.writeFileSync('server.js', s);
