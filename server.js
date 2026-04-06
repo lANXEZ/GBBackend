@@ -137,7 +137,7 @@ app.post('/api/user/change-password', async (req, res) => {
         }
 
         // Query database to check if username and DoB match
-        const [rows] = await db.query('SELECT UserID, DATE_FORMAT(DoB, "%Y-%m-%d") AS DoBString FROM User WHERE Username = ?', [username]);
+        const [rows] = await db.query('SELECT UserID, TO_CHAR(DoB, \'YYYY-MM-DD\') AS DoBString FROM User WHERE Username = ?', [username]);
         
         if (rows.length === 0) {
             return res.status(404).json({ error: "User not found" });
@@ -856,8 +856,8 @@ app.put('/api/workout-plan/:id', authenticateToken, async (req, res) => {
 
         // Optionally delete old ExerciseList and WorkingDay records
         if (oldDayIDs.length > 0) {
-            await conn.query('DELETE FROM ExerciseList WHERE WorkingDayID IN (?)', [oldDayIDs]);
-            await conn.query('DELETE FROM WorkingDay WHERE WorkingDayID IN (?)', [oldDayIDs]);
+            await conn.query('DELETE FROM ExerciseList WHERE WorkingDayID = ANY(?)', [oldDayIDs]);
+            await conn.query('DELETE FROM WorkingDay WHERE WorkingDayID = ANY(?)', [oldDayIDs]);
         }
 
         // Insert new schedules
