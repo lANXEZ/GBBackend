@@ -19,9 +19,6 @@ function convertQuery(query) {
   // PostgreSQL does not support backticks for identifiers, replace them with double quotes
   pgQuery = pgQuery.replace(/`/g, '"');
   
-  // "User" is a reserved keyword in PostgreSQL, so any raw unquoted occurrences need to be wrapped in quotes
-  pgQuery = pgQuery.replace(/\bUser\b/g, '"User"');
-  
   return pgQuery;
 }
 

@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const cors = require('cors');
 const { createCanvas } = require('@napi-rs/canvas'); // <--- The library for drawing
 
@@ -35,7 +35,7 @@ app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
         // Query database
-        const [rows] = await db.query('SELECT * FROM User WHERE Username = ?', [username]);
+        const [rows] = await db.query('SELECT * FROM "User" WHERE Username = ?', [username]);
         
         if (rows.length > 0) {
             const user = rows[0];
@@ -82,7 +82,7 @@ app.post('/api/register', async (req, res) => {
         }
 
         // Check if username already exists
-        const [existing] = await db.query('SELECT UserID FROM User WHERE Username = ?', [username]);
+        const [existing] = await db.query('SELECT UserID FROM "User" WHERE Username = ?', [username]);
         if (existing.length > 0) {
             return res.status(409).json({ error: "Username already exists" });
         }
@@ -93,7 +93,7 @@ app.post('/api/register', async (req, res) => {
 
         // Insert new user with hashed password and 'user' status
         const [result] = await db.query(
-            'INSERT INTO User (Username, Password, FirstName, LastName, DoB, Status, Sex) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO "User" (Username, Password, FirstName, LastName, DoB, Status, Sex) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [username, hashedPassword, firstName, lastName, birthdate, 'user', sexNorm]
         );
         
@@ -118,7 +118,7 @@ app.get('/api/user/check-username', async (req, res) => {
         if (!username) {
             return res.status(400).json({ error: "username is required" });
         }
-        const [rows] = await db.query('SELECT UserID FROM User WHERE Username = ?', [username]);
+        const [rows] = await db.query('SELECT UserID FROM "User" WHERE Username = ?', [username]);
         res.status(200).json({ available: rows.length === 0 });
     } catch (e) {
         console.error("Failed to check username:", e);
@@ -127,23 +127,24 @@ app.get('/api/user/check-username', async (req, res) => {
 });
 
 app.post('/api/user/unsubscribe', authenticateToken, async (req, res) => {
-    const conn = await db.getConnection();
+    let conn;
     try {
+        conn = await db.getConnection();
         const userId = req.user.id;
         await conn.beginTransaction();
 
-        await conn.query('UPDATE User SET Status = ? WHERE UserID = ?', ['user', userId]);
-        await conn.query('DELETE FROM traininglist WHERE ClientID = ?', [userId]);
-        await conn.query('UPDATE WorkoutPlan SET Type = ? WHERE UserID = ? AND Type = ?', ['G', userId, 'P']);
+        await conn.query('UPDATE "User" SET Status = ? WHERE UserID = ?', ['user', userId]);
+        await conn.query('DELETE FROM "TrainingList" WHERE ClientID = ?', [userId]);
+        await conn.query('UPDATE "WorkoutPlan" SET Type = ? WHERE UserID = ? AND Type = ?', ['G', userId, 'P']);
 
         await conn.commit();
         res.status(200).json({ message: "Unsubscribed successfully" });
     } catch (e) {
-        await conn.rollback();
+        if (conn) { try { await conn.rollback(); } catch (_) {} }
         console.error("Failed to unsubscribe:", e);
         res.status(500).json({ error: "Failed to unsubscribe" });
     } finally {
-        conn.release();
+        if (conn) conn.release();
     }
 });
 
@@ -156,7 +157,7 @@ app.post('/api/user/change-password', async (req, res) => {
         }
 
         // Query database to check if username and DoB match
-        const [rows] = await db.query('SELECT UserID, TO_CHAR(DoB, \'YYYY-MM-DD\') AS DoBString FROM User WHERE Username = ?', [username]);
+        const [rows] = await db.query('SELECT UserID, TO_CHAR(DoB, \'YYYY-MM-DD\') AS DoBString FROM "User" WHERE Username = ?', [username]);
         
         if (rows.length === 0) {
             return res.status(404).json({ error: "User not found" });
@@ -177,7 +178,7 @@ app.post('/api/user/change-password', async (req, res) => {
         const hashedPassword = await bcrypt.hash(newPassword, salt);
 
         // Update password
-        await db.query('UPDATE User SET Password = ? WHERE UserID = ?', [hashedPassword, user.UserID]);
+        await db.query('UPDATE "User" SET Password = ? WHERE UserID = ?', [hashedPassword, user.UserID]);
 
         res.status(200).json({ message: "Password changed successfully" });
     } catch (e) {
@@ -189,7 +190,7 @@ app.post('/api/user/change-password', async (req, res) => {
 app.get('/api/user/profile', authenticateToken, async (req, res) => {
     try {
         const targetUserId = req.query.user_id || req.user.id;
-        const [rows] = await db.query('SELECT * FROM User WHERE UserID = ?', [targetUserId]);
+        const [rows] = await db.query('SELECT * FROM "User" WHERE UserID = ?', [targetUserId]);
         
         if (rows.length === 0) {
             return res.status(404).json({ error: "User not found" });
@@ -209,8 +210,8 @@ app.get('/api/coach/clients', authenticateToken, async (req, res) => {
     try {
         const query = `
             SELECT u.UserID, u.Username, u.FirstName, u.LastName, u.Status
-            FROM User u
-            JOIN traininglist tl ON u.UserID = tl.ClientID
+            FROM "User" u
+            JOIN "TrainingList" tl ON u.UserID = tl.ClientID
             WHERE tl.TrainerID = ?
         `;
         const [rows] = await db.query(query, [req.user.id]);
@@ -230,7 +231,7 @@ app.post('/api/coach/invite', authenticateToken, async (req, res) => {
         }
 
         // Verify the client exists
-        const [users] = await db.query('SELECT UserID, Status FROM User WHERE UserID = ? AND Username = ?', [client_id, username]);
+        const [users] = await db.query('SELECT UserID, Status FROM "User" WHERE UserID = ? AND Username = ?', [client_id, username]);
         
         if (users.length === 0) {
             return res.status(404).json({ error: "User not found or username doesn't match ID" });
@@ -244,13 +245,13 @@ app.post('/api/coach/invite', authenticateToken, async (req, res) => {
         }
 
         // Check if already in the list
-        const [existing] = await db.query('SELECT * FROM traininglist WHERE TrainerID = ? AND ClientID = ?', [req.user.id, client_id]);
+        const [existing] = await db.query('SELECT * FROM "TrainingList" WHERE TrainerID = ? AND ClientID = ?', [req.user.id, client_id]);
         if (existing.length > 0) {
             return res.status(409).json({ error: "Client is already in your training list" });
         }
 
         // Insert into traininglist
-        await db.query('INSERT INTO traininglist (TrainerID, ClientID) VALUES (?, ?)', [req.user.id, client_id]);
+        await db.query('INSERT INTO "TrainingList" (TrainerID, ClientID) VALUES (?, ?)', [req.user.id, client_id]);
         
         res.status(201).json({ message: "Client added successfully" });
     } catch (e) {
@@ -263,7 +264,7 @@ app.delete('/api/coach/client/:id', authenticateToken, async (req, res) => {
     try {
         const client_id = req.params.id;
         
-        const [result] = await db.query('DELETE FROM traininglist WHERE TrainerID = ? AND ClientID = ?', [req.user.id, client_id]);
+        const [result] = await db.query('DELETE FROM "TrainingList" WHERE TrainerID = ? AND ClientID = ?', [req.user.id, client_id]);
         
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: "Client not found in your training list" });
@@ -288,7 +289,7 @@ app.post('/api/workout/create-exercise', authenticateToken, async (req, res) => 
         }
 
         const [result] = await db.query(
-            'INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType, SuggestSetAmount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO "ExerciseMoves" (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType, SuggestSetAmount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [steps || null, description, caution || null, url || null, accessibility, req.user.id, record_type, progress_type, suggest_set_amount || null]
         );
 
@@ -301,7 +302,7 @@ app.post('/api/workout/create-exercise', authenticateToken, async (req, res) => 
 
 app.get('/api/workout/fetch-public-exercise-move', authenticateToken, async (req, res) => {
     try {
-        const [rows] = await db.query("SELECT * FROM ExerciseMoves WHERE Accessibility = 'public'");
+        const [rows] = await db.query(`SELECT * FROM "ExerciseMoves" WHERE Accessibility = 'public'`);
         res.status(200).json(rows);
     } catch (e) {
         console.error("Failed to fetch public exercises:", e);
@@ -311,7 +312,7 @@ app.get('/api/workout/fetch-public-exercise-move', authenticateToken, async (req
 
 app.get('/api/workout/exercises', authenticateToken, async (req, res) => {
     try {
-        const [rows] = await db.query("SELECT * FROM ExerciseMoves WHERE Accessibility = 'public' OR UserID = ?", [req.user.id]);
+        const [rows] = await db.query(`SELECT * FROM "ExerciseMoves" WHERE Accessibility = 'public' OR UserID = ?`, [req.user.id]);
         res.status(200).json(rows);
     } catch (e) {
         console.error("Failed to fetch exercises:", e);
@@ -329,7 +330,7 @@ app.put('/api/workout/exercise/:id', authenticateToken, async (req, res) => {
         }
 
         const [result] = await db.query(
-            'UPDATE ExerciseMoves SET Description = ?, Steps = ?, Caution = ?, URL = ?, RecordType = ?, Accessibility = ?, ProgressType = ?, SuggestSetAmount = ? WHERE ExMoveID = ? AND UserID = ?',
+            'UPDATE "ExerciseMoves" SET Description = ?, Steps = ?, Caution = ?, URL = ?, RecordType = ?, Accessibility = ?, ProgressType = ?, SuggestSetAmount = ? WHERE ExMoveID = ? AND UserID = ?',
             [description, steps || null, caution || null, url || null, record_type, accessibility, progress_type, suggest_set_amount || null, exMoveID, req.user.id]
         );
 
@@ -346,7 +347,7 @@ app.put('/api/workout/exercise/:id', authenticateToken, async (req, res) => {
 app.delete('/api/workout/exercise/:id', authenticateToken, async (req, res) => {
     try {
         const exMoveID = req.params.id;
-        const [result] = await db.query('DELETE FROM ExerciseMoves WHERE ExMoveID = ? AND UserID = ?', [exMoveID, req.user.id]);
+        const [result] = await db.query('DELETE FROM "ExerciseMoves" WHERE ExMoveID = ? AND UserID = ?', [exMoveID, req.user.id]);
         
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: "Exercise not found or unauthorized to delete" });
@@ -365,7 +366,7 @@ app.post('/api/workout/save', authenticateToken, async (req, res) => {
         // Find Exercise Moves ID (assuming workout_type matches Description loosely)
         let exMoveID = ex_move_id;
         if (!exMoveID) {
-            const [exRows] = await db.query('SELECT ExMoveID FROM ExerciseMoves WHERE Description = ? LIMIT 1', [workout_type]);
+            const [exRows] = await db.query('SELECT ExMoveID FROM "ExerciseMoves" WHERE Description = ? LIMIT 1', [workout_type]);
             exMoveID = exRows.length > 0 ? exRows[0].ExMoveID : 1; // Default to 1 if not found
         }
         
@@ -378,8 +379,8 @@ app.post('/api/workout/save', authenticateToken, async (req, res) => {
         let workingDayID;
         const [validDayRows] = await db.query(`
             SELECT el.WorkingDayID 
-            FROM ExerciseList el
-            JOIN WorkingDay w ON el.WorkingDayID = w.WorkingDayID
+            FROM "ExerciseList" el
+            JOIN "WorkingDay" w ON el.WorkingDayID = w.WorkingDayID
             WHERE w.Day = ? AND el.ExMoveID = ?
             LIMIT 1
         `, [dbDay, exMoveID]);
@@ -388,15 +389,15 @@ app.post('/api/workout/save', authenticateToken, async (req, res) => {
             workingDayID = validDayRows[0].WorkingDayID;
         } else {
             // WE MUST CREATE A DUMMY LINK TO SATISFY FOREIGN KEY if none exists!
-            const [newDay] = await db.query('INSERT INTO WorkingDay (Day) VALUES (?)', [dbDay]);
+            const [newDay] = await db.query('INSERT INTO "WorkingDay" (Day) VALUES (?)', [dbDay]);
             workingDayID = newDay.insertId;
-            await db.query('INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES (?, ?)', [workingDayID, exMoveID]);
+            await db.query('INSERT INTO "ExerciseList" (WorkingDayID, ExMoveID) VALUES (?, ?)', [workingDayID, exMoveID]);
         }
 
         // Check if Session already exists today for this User and Exercise
         const sessionDateStr = d.toISOString().split('T')[0];
         const [existingSession] = await db.query(
-            'SELECT SessionID FROM Session WHERE UserID = ? AND ExMoveID = ? AND SessionDate = ? LIMIT 1',
+            'SELECT SessionID FROM "Session" WHERE UserID = ? AND ExMoveID = ? AND SessionDate = ? LIMIT 1',
             [req.user.id, exMoveID, sessionDateStr]
         );
 
@@ -406,14 +407,14 @@ app.post('/api/workout/save', authenticateToken, async (req, res) => {
         } else {
             // Insert new Session if none exists
             const [sessionResult] = await db.query(
-                'INSERT INTO Session (UserID, WorkingDayID, ExMoveID, SessionDate, UserWeight, UserHeight) VALUES (?, ?, ?, ?, ?, ?)', 
+                'INSERT INTO "Session" (UserID, WorkingDayID, ExMoveID, SessionDate, UserWeight, UserHeight) VALUES (?, ?, ?, ?, ?, ?)', 
                 [req.user.id, workingDayID, exMoveID, sessionDateStr, UserWeight || null, UserHeight || null]
             );
             sessionID = sessionResult.insertId;
         }
         
         // Insert PersonalRecord
-        const [prResult] = await db.query('INSERT INTO PersonalRecord (SessionID, Weight, Rep, Time) VALUES (?, ?, ?, ?)', [sessionID, weight || null, reps || null, time || null]);
+        const [prResult] = await db.query('INSERT INTO "PersonalRecord" (SessionID, Weight, Rep, Time) VALUES (?, ?, ?, ?)', [sessionID, weight || null, reps || null, time || null]);
         const prID = prResult.insertId;
         
         res.status(201).json({ workout_id: prID });
@@ -429,10 +430,10 @@ app.get('/api/workout/fetch', authenticateToken, async (req, res) => {
         const targetUserId = user_id || req.user.id;
         let query = `
             SELECT pr.PRID as workout_id, s.UserID as user_id, em.Description as workout_type, pr.Weight as weight, pr.Rep as reps, pr.Time as time, d.Day as day, s.SessionDate as date
-            FROM PersonalRecord pr
-            JOIN Session s ON pr.SessionID = s.SessionID
-            JOIN ExerciseMoves em ON s.ExMoveID = em.ExMoveID
-            JOIN WorkingDay d ON s.WorkingDayID = d.WorkingDayID
+            FROM "PersonalRecord" pr
+            JOIN "Session" s ON pr.SessionID = s.SessionID
+            JOIN "ExerciseMoves" em ON s.ExMoveID = em.ExMoveID
+            JOIN "WorkingDay" d ON s.WorkingDayID = d.WorkingDayID
             WHERE s.UserID = ?
         `;
         const params = [targetUserId];
@@ -461,7 +462,7 @@ app.get('/api/workout/fetch', authenticateToken, async (req, res) => {
 app.get('/api/workout/recent-body-stats', authenticateToken, async (req, res) => {
     try {
         const [rows] = await db.query(
-            'SELECT UserWeight, UserHeight FROM Session WHERE UserID = ? AND UserWeight IS NOT NULL ORDER BY SessionDate DESC, SessionID DESC LIMIT 1',
+            'SELECT UserWeight, UserHeight FROM "Session" WHERE UserID = ? AND UserWeight IS NOT NULL ORDER BY SessionDate DESC, SessionID DESC LIMIT 1',
             [req.user.id]
         );
         if (rows.length > 0) {
@@ -479,7 +480,7 @@ app.get('/api/workout/body-stats-history', authenticateToken, async (req, res) =
     try {
         const targetUserId = req.query.user_id || req.user.id;
         const [rows] = await db.query(
-            'SELECT UserWeight, UserHeight, SessionDate FROM Session WHERE UserID = ? AND UserWeight IS NOT NULL AND UserHeight IS NOT NULL ORDER BY SessionDate ASC',
+            'SELECT UserWeight, UserHeight, SessionDate FROM "Session" WHERE UserID = ? AND UserWeight IS NOT NULL AND UserHeight IS NOT NULL ORDER BY SessionDate ASC',
             [targetUserId]
         );
         res.status(200).json(rows);
@@ -493,7 +494,7 @@ app.get('/api/workout/today-completed', authenticateToken, async (req, res) => {
     try {
         const today = new Date().toISOString().split('T')[0];
         const [rows] = await db.query(
-            'SELECT DISTINCT ExMoveID FROM Session WHERE UserID = ? AND SessionDate = ?',
+            'SELECT DISTINCT ExMoveID FROM "Session" WHERE UserID = ? AND SessionDate = ?',
             [req.user.id, today]
         );
         const completedIds = rows.map(row => row.ExMoveID);
@@ -509,9 +510,9 @@ app.get('/api/workout/recent-plan', authenticateToken, async (req, res) => {
         const targetUserId = req.query.user_id || req.user.id;
         const query = `
             SELECT wp.PlanID 
-            FROM Session s
-            JOIN WorkoutRoutine wr ON s.WorkingDayID = wr.WorkingDayID
-            JOIN WorkoutPlan wp ON wr.PlanID = wp.PlanID
+            FROM "Session" s
+            JOIN "WorkoutRoutine" wr ON s.WorkingDayID = wr.WorkingDayID
+            JOIN "WorkoutPlan" wp ON wr.PlanID = wp.PlanID
             WHERE s.UserID = ? AND wp.UserID = ?
             ORDER BY s.SessionDate DESC, s.SessionID DESC
             LIMIT 1;
@@ -530,8 +531,9 @@ app.get('/api/workout/recent-plan', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/workout-plan/create', authenticateToken, async (req, res) => {
-    const conn = await db.getConnection();
+    let conn;
     try {
+        conn = await db.getConnection();
         const { plan_name, type, provider_id, user_id, days } = req.body;
 
         if (!plan_name || !days || !Array.isArray(days)) {
@@ -545,7 +547,7 @@ app.post('/api/workout-plan/create', authenticateToken, async (req, res) => {
 
         // 1. Insert WorkoutPlan
         const [planResult] = await conn.query(
-            'INSERT INTO WorkoutPlan (PlanName, UserID, Type, ProviderID) VALUES (?, ?, ?, ?)',
+            'INSERT INTO "WorkoutPlan" (PlanName, UserID, Type, ProviderID) VALUES (?, ?, ?, ?)',
             [plan_name, targetUserID, type || 'C', targetProviderID]
         );
         const planID = planResult.insertId;
@@ -558,19 +560,19 @@ app.post('/api/workout-plan/create', authenticateToken, async (req, res) => {
             if (!exercises || exercises.length === 0) continue;
 
             // Always create a new WorkingDay record for this plan to isolate its ExerciseList
-            const [newDay] = await conn.query('INSERT INTO WorkingDay (Day) VALUES (?)', [dayIndex]);
+            const [newDay] = await conn.query('INSERT INTO "WorkingDay" (Day) VALUES (?)', [dayIndex]);
             const workingDayID = newDay.insertId;
 
             // Link Plan to WorkingDay
             await conn.query(
-                'INSERT INTO WorkoutRoutine (PlanID, WorkingDayID) VALUES (?, ?)',
+                'INSERT INTO "WorkoutRoutine" (PlanID, WorkingDayID) VALUES (?, ?)',
                 [planID, workingDayID]
             );
 
             // Add exercises to ExerciseList for this WorkingDay
             for (const ex of exercises) {
                 await conn.query(
-                    'INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES (?, ?) ON CONFLICT DO NOTHING',
+                    'INSERT INTO "ExerciseList" (WorkingDayID, ExMoveID) VALUES (?, ?) ON CONFLICT DO NOTHING',
                     [workingDayID, ex.ex_move_id]
                 );
             }
@@ -579,24 +581,25 @@ app.post('/api/workout-plan/create', authenticateToken, async (req, res) => {
         await conn.commit();
         res.status(201).json({ message: "Workout plan created successfully", plan_id: planID });
     } catch (e) {
-        await conn.rollback();
+        if (conn) { try { await conn.rollback(); } catch (_) {} }
         console.error("Failed to create workout plan:", e);
         res.status(500).json({ error: "Failed to create workout plan" });
     } finally {
-        conn.release();
+        if (conn) conn.release();
     }
 });
 
 app.post('/api/workout-plan/auto-generate', authenticateToken, async (req, res) => {
-    const conn = await db.getConnection();
+    let conn;
     try {
+        conn = await db.getConnection();
         const { weight, height, goal, experience, days } = req.body;
         if (!weight || !height || !goal || !experience || !days) {
             return res.status(400).json({ error: "Missing required fields" });
         }
 
         // 0. Fetch user's sex + DoB so we can tailor exercise selection (but NOT set amount).
-        const [userRows] = await conn.query('SELECT Sex, TO_CHAR(DoB, \'YYYY-MM-DD\') AS DoBString FROM User WHERE UserID = ?', [req.user.id]);
+        const [userRows] = await conn.query('SELECT Sex, TO_CHAR(DoB, \'YYYY-MM-DD\') AS DoBString FROM "User" WHERE UserID = ?', [req.user.id]);
         const userSex = userRows.length > 0 ? (userRows[0].Sex || null) : null;
         let userAge = null;
         if (userRows.length > 0 && userRows[0].DoBString) {
@@ -608,7 +611,7 @@ app.post('/api/workout-plan/auto-generate', authenticateToken, async (req, res) 
         }
 
         // 1. Get available exercises from DB for the AI to choose from
-        const [exercises] = await conn.query("SELECT ExMoveID, Description FROM ExerciseMoves WHERE Accessibility = 'public'");
+        const [exercises] = await conn.query(`SELECT ExMoveID, Description FROM "ExerciseMoves" WHERE Accessibility = 'public'`);
         const exerciseList = exercises.map(e => `${e.ExMoveID}: ${e.Description}`).join(', ');
 
         // 2. Build a strict prompt
@@ -694,7 +697,7 @@ app.post('/api/workout-plan/auto-generate', authenticateToken, async (req, res) 
         const planDays = planData.days;
 
         const [planResult] = await conn.query(
-            'INSERT INTO WorkoutPlan (PlanName, UserID, Type, ProviderID) VALUES (?, ?, ?, ?)',
+            'INSERT INTO "WorkoutPlan" (PlanName, UserID, Type, ProviderID) VALUES (?, ?, ?, ?)',
             [planName, req.user.id, 'C', req.user.id]
         );
         const planID = planResult.insertId;
@@ -705,10 +708,10 @@ app.post('/api/workout-plan/auto-generate', authenticateToken, async (req, res) 
 
             if (!dayExercises || dayExercises.length === 0) continue;
 
-            const [newDay] = await conn.query('INSERT INTO WorkingDay (Day) VALUES (?)', [dayIndex]);
+            const [newDay] = await conn.query('INSERT INTO "WorkingDay" (Day) VALUES (?)', [dayIndex]);
             const workingDayID = newDay.insertId;
 
-            await conn.query('INSERT INTO WorkoutRoutine (PlanID, WorkingDayID) VALUES (?, ?)', [planID, workingDayID]);
+            await conn.query('INSERT INTO "WorkoutRoutine" (PlanID, WorkingDayID) VALUES (?, ?)', [planID, workingDayID]);
 
             for (const ex of dayExercises) {
                 let currentExId = null;
@@ -726,14 +729,14 @@ app.post('/api/workout-plan/auto-generate', authenticateToken, async (req, res) 
                         : null;
 
                     const [newExRes] = await conn.query(
-                        'INSERT INTO ExerciseMoves (Steps, Description, Caution, Accessibility, UserID, RecordType, ProgressType, SuggestSetAmount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                        'INSERT INTO "ExerciseMoves" (Steps, Description, Caution, Accessibility, UserID, RecordType, ProgressType, SuggestSetAmount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                         [ex.steps || null, ex.description, caution, 'public', req.user.id, recType, progType, suggest]
                     );
                     currentExId = newExRes.insertId;
                 }
 
                 if (currentExId) {
-                    await conn.query('INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES (?, ?) ON CONFLICT DO NOTHING', [workingDayID, currentExId]);
+                    await conn.query('INSERT INTO "ExerciseList" (WorkingDayID, ExMoveID) VALUES (?, ?) ON CONFLICT DO NOTHING', [workingDayID, currentExId]);
                 }
             }
         }
@@ -741,11 +744,11 @@ app.post('/api/workout-plan/auto-generate', authenticateToken, async (req, res) 
         await conn.commit();
         res.status(201).json({ message: "AI Workout plan created successfully", plan_id: planID });
     } catch (e) {
-        await conn.rollback();
+        if (conn) { try { await conn.rollback(); } catch (_) {} }
         console.error("Failed to auto-generate workout plan:", e);
         res.status(500).json({ error: e.message || "Failed to auto-generate workout plan" });
     } finally {
-        conn.release();
+        if (conn) conn.release();
     }
 });
 
@@ -764,11 +767,11 @@ app.get('/api/workout-plan', authenticateToken, async (req, res) => {
                 em.ExMoveID,
                 em.Description AS ExerciseName,
                 em.SuggestSetAmount AS ExerciseSuggestSetAmount
-            FROM WorkoutPlan wp
-            LEFT JOIN WorkoutRoutine wr ON wp.PlanID = wr.PlanID
-            LEFT JOIN WorkingDay d ON wr.WorkingDayID = d.WorkingDayID
-            LEFT JOIN ExerciseList el ON wr.WorkingDayID = el.WorkingDayID
-            LEFT JOIN ExerciseMoves em ON el.ExMoveID = em.ExMoveID
+            FROM "WorkoutPlan" wp
+            LEFT JOIN "WorkoutRoutine" wr ON wp.PlanID = wr.PlanID
+            LEFT JOIN "WorkingDay" d ON wr.WorkingDayID = d.WorkingDayID
+            LEFT JOIN "ExerciseList" el ON wr.WorkingDayID = el.WorkingDayID
+            LEFT JOIN "ExerciseMoves" em ON el.ExMoveID = em.ExMoveID
             WHERE wp.UserID = ?
         `;
         const [rows] = await db.query(query, [targetUserId]);
@@ -803,7 +806,7 @@ app.get('/api/workout-plan', authenticateToken, async (req, res) => {
                         dayEntry.exercises.push({
                             ex_move_id: row.ExMoveID,
                             name: row.ExerciseName,
-                            suggest_set_amount: row.ExerciseSuggestSetAmount || null
+                            suggest_set_amount: row.exercisesuggestsetamount || null
                         });
                     }
                 }
@@ -833,11 +836,11 @@ app.get('/api/workout-plan/:id', authenticateToken, async (req, res) => {
                 em.ExMoveID,
                 em.Description AS ExerciseName,
                 em.SuggestSetAmount AS ExerciseSuggestSetAmount
-            FROM WorkoutPlan wp
-            LEFT JOIN WorkoutRoutine wr ON wp.PlanID = wr.PlanID
-            LEFT JOIN WorkingDay d ON wr.WorkingDayID = d.WorkingDayID
-            LEFT JOIN ExerciseList el ON wr.WorkingDayID = el.WorkingDayID
-            LEFT JOIN ExerciseMoves em ON el.ExMoveID = em.ExMoveID
+            FROM "WorkoutPlan" wp
+            LEFT JOIN "WorkoutRoutine" wr ON wp.PlanID = wr.PlanID
+            LEFT JOIN "WorkingDay" d ON wr.WorkingDayID = d.WorkingDayID
+            LEFT JOIN "ExerciseList" el ON wr.WorkingDayID = el.WorkingDayID
+            LEFT JOIN "ExerciseMoves" em ON el.ExMoveID = em.ExMoveID
             WHERE wp.PlanID = ? AND (wp.UserID = ? OR wp.ProviderID = ?)
         `;
         const [rows] = await db.query(query, [planId, req.user.id, req.user.id]);
@@ -875,7 +878,7 @@ app.get('/api/workout-plan/:id', authenticateToken, async (req, res) => {
                         dayEntry.exercises.push({
                             ex_move_id: row.ExMoveID,
                             name: row.ExerciseName,
-                            suggest_set_amount: row.ExerciseSuggestSetAmount || null
+                            suggest_set_amount: row.exercisesuggestsetamount || null
                         });
                     }
                 }
@@ -891,8 +894,9 @@ app.get('/api/workout-plan/:id', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/workout-plan/:id', authenticateToken, async (req, res) => {
-    const conn = await db.getConnection();
+    let conn;
     try {
+        conn = await db.getConnection();
         const planID = req.params.id;
         const { plan_name, days } = req.body;
 
@@ -903,9 +907,9 @@ app.put('/api/workout-plan/:id', authenticateToken, async (req, res) => {
         await conn.beginTransaction();
 
         // Ensure user owns this plan AND they are the provider
-        const [checkRows] = await conn.query('SELECT * FROM WorkoutPlan WHERE PlanID = ?', [planID]);
+        const [checkRows] = await conn.query('SELECT * FROM "WorkoutPlan" WHERE PlanID = ?', [planID]);
         if (checkRows.length === 0) {
-            await conn.rollback();
+            if (conn) { try { await conn.rollback(); } catch (_) {} }
             return res.status(404).json({ error: "Workout plan not found" });
         }
         
@@ -927,24 +931,24 @@ app.put('/api/workout-plan/:id', authenticateToken, async (req, res) => {
         }
 
         if (!allow) {
-            await conn.rollback();
+            if (conn) { try { await conn.rollback(); } catch (_) {} }
             return res.status(403).json({ error: "You are not authorized to edit this plan." });
         }
 
         // Update PlanName
-        await conn.query('UPDATE WorkoutPlan SET PlanName = ? WHERE PlanID = ?', [plan_name, planID]);
+        await conn.query('UPDATE "WorkoutPlan" SET PlanName = ? WHERE PlanID = ?', [plan_name, planID]);
 
         // Get existing working days to delete their dependencies
-        const [oldRoutines] = await conn.query('SELECT WorkingDayID FROM WorkoutRoutine WHERE PlanID = ?', [planID]);
+        const [oldRoutines] = await conn.query('SELECT WorkingDayID FROM "WorkoutRoutine" WHERE PlanID = ?', [planID]);
         const oldDayIDs = oldRoutines.map(r => r.WorkingDayID);
 
         // Delete from WorkoutRoutine
-        await conn.query('DELETE FROM WorkoutRoutine WHERE PlanID = ?', [planID]);
+        await conn.query('DELETE FROM "WorkoutRoutine" WHERE PlanID = ?', [planID]);
 
         // Optionally delete old ExerciseList and WorkingDay records
         if (oldDayIDs.length > 0) {
-            await conn.query('DELETE FROM ExerciseList WHERE WorkingDayID = ANY(?)', [oldDayIDs]);
-            await conn.query('DELETE FROM WorkingDay WHERE WorkingDayID = ANY(?)', [oldDayIDs]);
+            await conn.query('DELETE FROM "ExerciseList" WHERE WorkingDayID = ANY(?)', [oldDayIDs]);
+            await conn.query('DELETE FROM "WorkingDay" WHERE WorkingDayID = ANY(?)', [oldDayIDs]);
         }
 
         // Insert new schedules
@@ -954,24 +958,24 @@ app.put('/api/workout-plan/:id', authenticateToken, async (req, res) => {
 
             if (!exercises || exercises.length === 0) continue;
 
-            const [newDay] = await conn.query('INSERT INTO WorkingDay (Day) VALUES (?)', [dayIndex]);
+            const [newDay] = await conn.query('INSERT INTO "WorkingDay" (Day) VALUES (?)', [dayIndex]);
             const workingDayID = newDay.insertId;
 
-            await conn.query('INSERT INTO WorkoutRoutine (PlanID, WorkingDayID) VALUES (?, ?)', [planID, workingDayID]);
+            await conn.query('INSERT INTO "WorkoutRoutine" (PlanID, WorkingDayID) VALUES (?, ?)', [planID, workingDayID]);
 
             for (const ex of exercises) {
-                await conn.query('INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES (?, ?) ON CONFLICT DO NOTHING', [workingDayID, ex.ex_move_id]);
+                await conn.query('INSERT INTO "ExerciseList" (WorkingDayID, ExMoveID) VALUES (?, ?) ON CONFLICT DO NOTHING', [workingDayID, ex.ex_move_id]);
             }
         }
 
         await conn.commit();
         res.status(200).json({ message: "Workout plan updated successfully" });
     } catch (e) {
-        await conn.rollback();
+        if (conn) { try { await conn.rollback(); } catch (_) {} }
         console.error("Failed to update workout plan:", e);
         res.status(500).json({ error: "Failed to update workout plan" });
     } finally {
-        conn.release();
+        if (conn) conn.release();
     }
 });
 
@@ -979,7 +983,7 @@ app.delete('/api/workout-plan/:id', authenticateToken, async (req, res) => {
     try {
         const planID = req.params.id;
         
-        const [checkRows] = await db.query('SELECT * FROM WorkoutPlan WHERE PlanID = ?', [planID]);
+        const [checkRows] = await db.query('SELECT * FROM "WorkoutPlan" WHERE PlanID = ?', [planID]);
         if (checkRows.length === 0) {
             return res.status(404).json({ error: "Workout plan not found" });
         }
@@ -1006,7 +1010,7 @@ app.delete('/api/workout-plan/:id', authenticateToken, async (req, res) => {
         }
         
         // Let the cascaded delete delete dependent records, just delete from WorkoutPlan
-        await db.query('DELETE FROM WorkoutPlan WHERE PlanID = ?', [planID]);
+        await db.query('DELETE FROM "WorkoutPlan" WHERE PlanID = ?', [planID]);
         
         res.status(200).json({ message: "Workout plan deleted successfully" });
     } catch (e) {
@@ -1018,8 +1022,9 @@ app.delete('/api/workout-plan/:id', authenticateToken, async (req, res) => {
 
 
 app.post('/api/workout-plan/:id/send', authenticateToken, async (req, res) => {
-    const conn = await db.getConnection();
+    let conn;
     try {
+        conn = await db.getConnection();
         const planID = req.params.id;
         const { receiver_id, receiver_username } = req.body;
 
@@ -1028,7 +1033,7 @@ app.post('/api/workout-plan/:id/send', authenticateToken, async (req, res) => {
         }
 
         // 1. Verify Receiver
-        const [users] = await conn.query('SELECT UserID FROM User WHERE UserID = ? AND Username = ?', [receiver_id, receiver_username]);
+        const [users] = await conn.query('SELECT UserID FROM "User" WHERE UserID = ? AND Username = ?', [receiver_id, receiver_username]);
         if (users.length === 0) {
             return res.status(404).json({ error: "User not found or username doesn't match ID." });
         }
@@ -1039,11 +1044,11 @@ app.post('/api/workout-plan/:id/send', authenticateToken, async (req, res) => {
             SELECT 
                 wp.PlanID, wp.PlanName, wp.ProviderID, wp.UserID, wp.Type,
                 wr.WorkingDayID, d.Day, em.ExMoveID
-            FROM WorkoutPlan wp
-            LEFT JOIN WorkoutRoutine wr ON wp.PlanID = wr.PlanID
-            LEFT JOIN WorkingDay d ON wr.WorkingDayID = d.WorkingDayID
-            LEFT JOIN ExerciseList el ON wr.WorkingDayID = el.WorkingDayID
-            LEFT JOIN ExerciseMoves em ON el.ExMoveID = em.ExMoveID
+            FROM "WorkoutPlan" wp
+            LEFT JOIN "WorkoutRoutine" wr ON wp.PlanID = wr.PlanID
+            LEFT JOIN "WorkingDay" d ON wr.WorkingDayID = d.WorkingDayID
+            LEFT JOIN "ExerciseList" el ON wr.WorkingDayID = el.WorkingDayID
+            LEFT JOIN "ExerciseMoves" em ON el.ExMoveID = em.ExMoveID
             WHERE wp.PlanID = ? AND wp.UserID = ?
         `;
         const [rows] = await conn.query(query, [planID, req.user.id]);
@@ -1076,7 +1081,7 @@ app.post('/api/workout-plan/:id/send', authenticateToken, async (req, res) => {
         // 3. Create the new WorkoutPlan for receiver
         const targetProviderID = req.user.id;
         const [planResult] = await conn.query(
-            'INSERT INTO WorkoutPlan (PlanName, UserID, Type, ProviderID) VALUES (?, ?, ?, ?)',
+            'INSERT INTO "WorkoutPlan" (PlanName, UserID, Type, ProviderID) VALUES (?, ?, ?, ?)',
             [plan_name, targetUserID, 'S', targetProviderID]
         );
         const newPlanID = planResult.insertId;
@@ -1088,24 +1093,24 @@ app.post('/api/workout-plan/:id/send', authenticateToken, async (req, res) => {
             
             if (!exercises || exercises.length === 0) continue;
             
-            const [newDay] = await conn.query('INSERT INTO WorkingDay (Day) VALUES (?)', [dayIndex]);
+            const [newDay] = await conn.query('INSERT INTO "WorkingDay" (Day) VALUES (?)', [dayIndex]);
             const workingDayID = newDay.insertId;
             
-            await conn.query('INSERT INTO WorkoutRoutine (PlanID, WorkingDayID) VALUES (?, ?)', [newPlanID, workingDayID]);
+            await conn.query('INSERT INTO "WorkoutRoutine" (PlanID, WorkingDayID) VALUES (?, ?)', [newPlanID, workingDayID]);
             
             for (const ex of exercises) {
-                await conn.query('INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES (?, ?) ON CONFLICT DO NOTHING', [workingDayID, ex.ex_move_id]);
+                await conn.query('INSERT INTO "ExerciseList" (WorkingDayID, ExMoveID) VALUES (?, ?) ON CONFLICT DO NOTHING', [workingDayID, ex.ex_move_id]);
             }
         }
         
         await conn.commit();
         res.status(201).json({ message: "Plan sent successfully!", plan_id: newPlanID });
     } catch (e) {
-        await conn.rollback();
+        if (conn) { try { await conn.rollback(); } catch (_) {} }
         console.error("Failed to send plan:", e);
         res.status(500).json({ error: "Failed to send plan" });
     } finally {
-        conn.release();
+        if (conn) conn.release();
     }
 });
 
@@ -1120,7 +1125,7 @@ app.post('/api/workout/exercise/:id/send', authenticateToken, async (req, res) =
 
         // 1. Verify receiver
         const [users] = await db.query(
-            'SELECT UserID FROM User WHERE UserID = ? AND Username = ?',
+            'SELECT UserID FROM "User" WHERE UserID = ? AND Username = ?',
             [receiver_id, receiver_username]
         );
         if (users.length === 0) {
@@ -1129,7 +1134,7 @@ app.post('/api/workout/exercise/:id/send', authenticateToken, async (req, res) =
         const targetUserID = users[0].UserID;
 
         // 2. Fetch source exercise move
-        const [rows] = await db.query('SELECT * FROM ExerciseMoves WHERE ExMoveID = ?', [exMoveID]);
+        const [rows] = await db.query('SELECT * FROM "ExerciseMoves" WHERE ExMoveID = ?', [exMoveID]);
         if (rows.length === 0) {
             return res.status(404).json({ error: "Exercise not found." });
         }
@@ -1137,7 +1142,7 @@ app.post('/api/workout/exercise/:id/send', authenticateToken, async (req, res) =
 
         // 3. Duplicate with receiver as owner (silent duplicate allowed)
         const [result] = await db.query(
-            'INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType, SuggestSetAmount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO "ExerciseMoves" (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType, SuggestSetAmount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [ex.Steps || null, ex.Description, ex.Caution || null, ex.URL || null, ex.Accessibility, targetUserID, ex.RecordType, ex.ProgressType, ex.SuggestSetAmount || null]
         );
 
@@ -1151,7 +1156,7 @@ app.post('/api/workout/exercise/:id/send', authenticateToken, async (req, res) =
 app.get('/api/workout/exercise/:id', authenticateToken, async (req, res) => {
     try {
         const exMoveID = req.params.id;
-        const [rows] = await db.query('SELECT * FROM ExerciseMoves WHERE ExMoveID = ?', [exMoveID]);
+        const [rows] = await db.query('SELECT * FROM "ExerciseMoves" WHERE ExMoveID = ?', [exMoveID]);
         
         if (rows.length === 0) {
             return res.status(404).json({ error: "Exercise not found" });
@@ -1170,14 +1175,14 @@ app.get('/api/workout/is-struggle', authenticateToken, async (req, res) => {
         // Basic struggle logic replaced with DB queries
         const [rows] = await db.query(`
             SELECT pr.Rep 
-            FROM PersonalRecord pr
-            JOIN Session s ON pr.SessionID = s.SessionID
-            JOIN ExerciseMoves em ON s.ExMoveID = em.ExMoveID
+            FROM "PersonalRecord" pr
+            JOIN "Session" s ON pr.SessionID = s.SessionID
+            JOIN "ExerciseMoves" em ON s.ExMoveID = em.ExMoveID
             WHERE s.UserID = ? AND em.Description = ?
             ORDER BY pr.PRID DESC LIMIT 5
         `, [req.user.id, workout_type || '']);
         
-        if (rows.length < 5) return res.status(400).json({ error: "Insufficient Data" });
+        if (rows.length < 5) return res.status(200).json({ struggling: false, reason: 'insufficient_data' });
         
         let totalReps = 0;
         rows.forEach(r => totalReps += ((r.Rep || r.rep) || 0));
@@ -1196,13 +1201,13 @@ app.get('/api/workout/is-overloadable', authenticateToken, async (req, res) => {
         if (!exMoveId) return res.status(400).json({ error: "ex_move_id is required" });
 
         // Look up progressType for the move
-        const [exRows] = await db.query('SELECT ProgressType FROM ExerciseMoves WHERE ExMoveID = ?', [exMoveId]);
+        const [exRows] = await db.query('SELECT ProgressType FROM "ExerciseMoves" WHERE ExMoveID = ?', [exMoveId]);
         if (exRows.length === 0) return res.status(404).json({ error: "Exercise not found" });
         const progressType = (exRows[0].ProgressType || 'increase').toLowerCase();
 
         // 4 most recent completed sessions by this user for this move (most recent first).
         const [sessionRows] = await db.query(
-            'SELECT SessionID FROM Session WHERE UserID = ? AND ExMoveID = ? ORDER BY SessionDate DESC, SessionID DESC LIMIT 4',
+            'SELECT SessionID FROM "Session" WHERE UserID = ? AND ExMoveID = ? ORDER BY SessionDate DESC, SessionID DESC LIMIT 4',
             [req.user.id, exMoveId]
         );
 
@@ -1214,7 +1219,7 @@ app.get('/api/workout/is-overloadable', authenticateToken, async (req, res) => {
         const sessionIds = sessionRows.map(r => r.SessionID).reverse();
         const aggregates = [];
         for (const sid of sessionIds) {
-            const [prs] = await db.query('SELECT Weight, Rep, Time FROM PersonalRecord WHERE SessionID = ?', [sid]);
+            const [prs] = await db.query('SELECT Weight, Rep, Time FROM "PersonalRecord" WHERE SessionID = ?', [sid]);
             const weights = prs.map(p => p.Weight).filter(v => v != null).map(Number);
             const reps = prs.map(p => p.Rep).filter(v => v != null).map(Number);
             const times = prs.map(p => p.Time).filter(v => v != null).map(Number);
@@ -1263,13 +1268,13 @@ app.post('/api/payment/process', authenticateToken, (req, res) => {
 app.post('/api/user/upgrade', authenticateToken, async (req, res) => {
     try {
         const [result] = await db.query(
-            "UPDATE User SET Status = 'training client' WHERE UserID = ?",
+            `UPDATE "User" SET Status = 'training client' WHERE UserID = ?`,
             [req.user.id]
         );
 
         // Turn the ghosted plan back to the active type P plan as normal
         await db.query(
-            "UPDATE WorkoutPlan SET Type = 'P' WHERE UserID = ? AND Type = 'G'",
+            `UPDATE "WorkoutPlan" SET Type = 'P' WHERE UserID = ? AND Type = 'G'`,
             [req.user.id]
         );
         
@@ -1294,9 +1299,9 @@ app.get('/api/workout/performance-graph', authenticateToken, async (req, res) =>
     try {
         const [rows] = await db.query(`
             SELECT pr.PRID 
-            FROM PersonalRecord pr
-            JOIN Session s ON pr.SessionID = s.SessionID
-            JOIN ExerciseMoves em ON s.ExMoveID = em.ExMoveID
+            FROM "PersonalRecord" pr
+            JOIN "Session" s ON pr.SessionID = s.SessionID
+            JOIN "ExerciseMoves" em ON s.ExMoveID = em.ExMoveID
             WHERE s.UserID = ? AND em.Description = ?
         `, [req.user.id, workout_type]);
 
@@ -1336,7 +1341,7 @@ const authenticateAdmin = (req, res, next) => {
 
 app.get('/api/admin/users', authenticateAdmin, async (req, res) => {
     try {
-        const [rows] = await db.query('SELECT UserID, Username, FirstName, LastName, Status FROM User');
+        const [rows] = await db.query('SELECT UserID, Username, FirstName, LastName, Status FROM "User"');
         res.status(200).json(rows);
     } catch (e) {
         console.error(e);
@@ -1350,7 +1355,7 @@ app.put('/api/admin/user/:id/role', authenticateAdmin, async (req, res) => {
         if (!['user', 'trainer', 'training client', 'admin'].includes(status)) {
             return res.status(400).json({ error: "Invalid status" });
         }
-        await db.query('UPDATE User SET Status = ? WHERE UserID = ?', [status, req.params.id]);
+        await db.query('UPDATE "User" SET Status = ? WHERE UserID = ?', [status, req.params.id]);
         res.status(200).json({ message: "User status updated" });
     } catch (e) {
         console.error(e);
@@ -1360,7 +1365,7 @@ app.put('/api/admin/user/:id/role', authenticateAdmin, async (req, res) => {
 
 app.get('/api/admin/exercises', authenticateAdmin, async (req, res) => {
     try {
-        const [rows] = await db.query("SELECT * FROM ExerciseMoves WHERE Accessibility = 'public'");
+        const [rows] = await db.query(`SELECT * FROM "ExerciseMoves" WHERE Accessibility = 'public'`);
         res.status(200).json(rows);
     } catch (e) {
         console.error("Failed to fetch public exercises:", e);
@@ -1378,7 +1383,7 @@ app.put('/api/admin/exercise/:id', authenticateAdmin, async (req, res) => {
         }
 
         const [result] = await db.query(
-            'UPDATE ExerciseMoves SET Description = ?, Steps = ?, Caution = ?, URL = ?, RecordType = ?, Accessibility = ?, ProgressType = ?, SuggestSetAmount = ? WHERE ExMoveID = ?',
+            'UPDATE "ExerciseMoves" SET Description = ?, Steps = ?, Caution = ?, URL = ?, RecordType = ?, Accessibility = ?, ProgressType = ?, SuggestSetAmount = ? WHERE ExMoveID = ?',
             [description, steps || null, caution || null, url || null, record_type, accessibility, progress_type, suggest_set_amount || null, exMoveID]
         );
 
@@ -1393,7 +1398,7 @@ app.put('/api/admin/exercise/:id', authenticateAdmin, async (req, res) => {
 app.delete('/api/admin/exercise/:id', authenticateAdmin, async (req, res) => {
     try {
         const exMoveID = req.params.id;
-        const [result] = await db.query('DELETE FROM ExerciseMoves WHERE ExMoveID = ?', [exMoveID]);
+        const [result] = await db.query('DELETE FROM "ExerciseMoves" WHERE ExMoveID = ?', [exMoveID]);
         
         if (result.affectedRows === 0) return res.status(404).json({ error: "Exercise not found" });
         res.status(200).json({ message: "Exercise deleted successfully" });
@@ -1414,9 +1419,9 @@ app.post('/api/generate-image', authenticateToken, async (req, res) => {
         // 1. Get data from the database using PRID
         const [rows] = await db.query(`
             SELECT pr.Weight, pr.Rep, pr.Time, em.Description 
-            FROM PersonalRecord pr
-            JOIN Session s ON pr.SessionID = s.SessionID
-            JOIN ExerciseMoves em ON s.ExMoveID = em.ExMoveID
+            FROM "PersonalRecord" pr
+            JOIN "Session" s ON pr.SessionID = s.SessionID
+            JOIN "ExerciseMoves" em ON s.ExMoveID = em.ExMoveID
             WHERE pr.PRID = ? AND s.UserID = ?
         `, [PRID, req.user.id]);
 
@@ -1570,11 +1575,11 @@ app.post('/api/generate-plan-image', authenticateToken, async (req, res) => {
                 wp.PlanName, 
                 d.Day,
                 em.Description AS ExerciseName
-            FROM WorkoutPlan wp
-            LEFT JOIN WorkoutRoutine wr ON wp.PlanID = wr.PlanID
-            LEFT JOIN WorkingDay d ON wr.WorkingDayID = d.WorkingDayID
-            LEFT JOIN ExerciseList el ON wr.WorkingDayID = el.WorkingDayID
-            LEFT JOIN ExerciseMoves em ON el.ExMoveID = em.ExMoveID
+            FROM "WorkoutPlan" wp
+            LEFT JOIN "WorkoutRoutine" wr ON wp.PlanID = wr.PlanID
+            LEFT JOIN "WorkingDay" d ON wr.WorkingDayID = d.WorkingDayID
+            LEFT JOIN "ExerciseList" el ON wr.WorkingDayID = el.WorkingDayID
+            LEFT JOIN "ExerciseMoves" em ON el.ExMoveID = em.ExMoveID
             WHERE wp.PlanID = ? AND wp.UserID = ?
             ORDER BY d.Day ASC, em.ExMoveID ASC
         `;
