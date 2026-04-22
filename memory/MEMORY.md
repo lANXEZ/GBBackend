@@ -1,0 +1,4 @@
+- [Project layout](project_layout.md) — Two-repo setup: GBBackend (Express + pg) and GymBro (client); beta, DB can be wiped
+- [Fix batch Apr 2026](project_fix_batch_2026_04.md) — Large upgrade batch from E:\Work\GB Fix list.txt; decisions and scope captured
+- [Progressive overload rules](project_overload_rules.md) — Detection logic, PR comparison, progressType conventions
+- [User collaboration style](user_profile.md) — Solo dev, prefers phased execution with check-ins, tolerant of DB wipes during beta

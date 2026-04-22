@@ -70,10 +70,15 @@ app.post('/api/login', async (req, res) => {
 
 app.post('/api/register', async (req, res) => {
     try {
-        const { username, password, firstName, lastName, birthdate } = req.body;
-        
-        if (!username || !password || !firstName || !lastName || !birthdate) {
+        const { username, password, firstName, lastName, birthdate, sex } = req.body;
+
+        if (!username || !password || !firstName || !lastName || !birthdate || !sex) {
             return res.status(400).json({ error: "All fields are required" });
+        }
+
+        const sexNorm = String(sex).toLowerCase();
+        if (sexNorm !== 'm' && sexNorm !== 'f') {
+            return res.status(400).json({ error: "Sex must be 'm' or 'f'" });
         }
 
         // Check if username already exists
@@ -88,8 +93,8 @@ app.post('/api/register', async (req, res) => {
 
         // Insert new user with hashed password and 'user' status
         const [result] = await db.query(
-            'INSERT INTO User (Username, Password, FirstName, LastName, DoB, Status) VALUES (?, ?, ?, ?, ?, ?)',
-            [username, hashedPassword, firstName, lastName, birthdate, 'user']
+            'INSERT INTO User (Username, Password, FirstName, LastName, DoB, Status, Sex) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [username, hashedPassword, firstName, lastName, birthdate, 'user', sexNorm]
         );
         
         // Generate JWT token so they are logged in immediately
@@ -104,6 +109,20 @@ app.post('/api/register', async (req, res) => {
     } catch (e) {
         console.error("Failed to register user:", e);
         res.status(500).json({ error: "Failed to register user" });
+    }
+});
+
+app.get('/api/user/check-username', async (req, res) => {
+    try {
+        const username = (req.query.username || '').toString().trim();
+        if (!username) {
+            return res.status(400).json({ error: "username is required" });
+        }
+        const [rows] = await db.query('SELECT UserID FROM User WHERE Username = ?', [username]);
+        res.status(200).json({ available: rows.length === 0 });
+    } catch (e) {
+        console.error("Failed to check username:", e);
+        res.status(500).json({ error: "Failed to check username" });
     }
 });
 
@@ -259,17 +278,20 @@ app.delete('/api/coach/client/:id', authenticateToken, async (req, res) => {
 
 app.post('/api/workout/create-exercise', authenticateToken, async (req, res) => {
     try {
-        const { steps, description, caution, url, accessibility, record_type, progress_type } = req.body;
-        
-        if (!steps || !description || !accessibility || !record_type || !progress_type) {
+        const { steps, description, caution, url, accessibility, record_type, progress_type, suggest_set_amount } = req.body;
+
+        if (!description || !accessibility || !record_type || !progress_type) {
             return res.status(400).json({ error: "Missing required fields" });
+        }
+        if (progress_type !== 'increase' && progress_type !== 'decrease') {
+            return res.status(400).json({ error: "progress_type must be 'increase' or 'decrease'" });
         }
 
         const [result] = await db.query(
-            'INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [steps, description, caution || null, url || null, accessibility, req.user.id, record_type, progress_type]
+            'INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType, SuggestSetAmount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [steps || null, description, caution || null, url || null, accessibility, req.user.id, record_type, progress_type, suggest_set_amount || null]
         );
-        
+
         res.status(201).json({ message: "Exercise created successfully", ex_move_id: result.insertId });
     } catch (e) {
         console.error("Failed to create exercise:", e);
@@ -300,11 +322,15 @@ app.get('/api/workout/exercises', authenticateToken, async (req, res) => {
 app.put('/api/workout/exercise/:id', authenticateToken, async (req, res) => {
     try {
         const exMoveID = req.params.id;
-        const { description, steps, caution, url, record_type, accessibility, progress_type } = req.body;
-        
+        const { description, steps, caution, url, record_type, accessibility, progress_type, suggest_set_amount } = req.body;
+
+        if (progress_type && progress_type !== 'increase' && progress_type !== 'decrease') {
+            return res.status(400).json({ error: "progress_type must be 'increase' or 'decrease'" });
+        }
+
         const [result] = await db.query(
-            'UPDATE ExerciseMoves SET Description = ?, Steps = ?, Caution = ?, URL = ?, RecordType = ?, Accessibility = ?, ProgressType = ? WHERE ExMoveID = ? AND UserID = ?',
-            [description, steps, caution || null, url || null, record_type, accessibility, progress_type, exMoveID, req.user.id]
+            'UPDATE ExerciseMoves SET Description = ?, Steps = ?, Caution = ?, URL = ?, RecordType = ?, Accessibility = ?, ProgressType = ?, SuggestSetAmount = ? WHERE ExMoveID = ? AND UserID = ?',
+            [description, steps || null, caution || null, url || null, record_type, accessibility, progress_type, suggest_set_amount || null, exMoveID, req.user.id]
         );
 
         if (result.affectedRows === 0) {
@@ -569,14 +595,29 @@ app.post('/api/workout-plan/auto-generate', authenticateToken, async (req, res) 
             return res.status(400).json({ error: "Missing required fields" });
         }
 
+        // 0. Fetch user's sex + DoB so we can tailor exercise selection (but NOT set amount).
+        const [userRows] = await conn.query('SELECT Sex, TO_CHAR(DoB, \'YYYY-MM-DD\') AS DoBString FROM User WHERE UserID = ?', [req.user.id]);
+        const userSex = userRows.length > 0 ? (userRows[0].Sex || null) : null;
+        let userAge = null;
+        if (userRows.length > 0 && userRows[0].DoBString) {
+            const dob = new Date(userRows[0].DoBString);
+            const now = new Date();
+            userAge = now.getFullYear() - dob.getFullYear();
+            const m = now.getMonth() - dob.getMonth();
+            if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) userAge--;
+        }
+
         // 1. Get available exercises from DB for the AI to choose from
         const [exercises] = await conn.query("SELECT ExMoveID, Description FROM ExerciseMoves WHERE Accessibility = 'public'");
         const exerciseList = exercises.map(e => `${e.ExMoveID}: ${e.Description}`).join(', ');
 
         // 2. Build a strict prompt
+        const sexLabel = userSex === 'f' ? 'female' : userSex === 'm' ? 'male' : 'unspecified';
+        const ageLabel = userAge != null ? `${userAge} years old` : 'unspecified age';
         const prompt = `
         You are a professional personal trainer. Create a ${days}-day workout plan.
-        User Profile: Weight: ${weight}kg, Height: ${height}cm, Experience Level: ${experience}, Goal: ${goal}.
+        User Profile: ${sexLabel}, ${ageLabel}, Weight: ${weight}kg, Height: ${height}cm, Experience Level: ${experience}, Goal: ${goal}.
+        Use the user's sex and age to pick exercises that are compatible for them. However, the "suggest_set_amount" you assign to a newly created exercise move must be a universal guideline for that exercise (do NOT specialize it by this user's sex, age, or weight), so the created exercise move can be reused across users.
 
         Available exercises in our database (ID: Name):
         ${exerciseList}
@@ -586,24 +627,27 @@ app.post('/api/workout-plan/auto-generate', authenticateToken, async (req, res) 
           "plan_name": "AI Generated Plan for ${goal}",
           "days": [
             {
-              "day": 0, 
-              "exercises": [ 
+              "day": 0,
+              "exercises": [
                 { "use_existing": true, "ex_move_id": ID_NUMBER },
-                { 
-                  "use_existing": false, 
-                  "description": "New Exercise Name", 
-                  "steps": "1. Step one 2. Step two...", 
+                {
+                  "use_existing": false,
+                  "description": "New Exercise Name",
+                  "steps": "1. Step one 2. Step two...",
                   "caution": "Keep back straight",
-                  "record_type": "Weight",
-                  "progress_type": "Volume"
+                  "record_type": "weight",
+                  "progress_type": "increase",
+                  "suggest_set_amount": "3-5"
                 }
               ]
             }
           ]
         }
-        Note: "day" should be a number from 0 to 6 (Monday=0, Sunday=6). 
-        You CAN use existing ExMoveIDs if they fit perfectly. 
-        If you need a specific exercise that is NOT in the available exercises list, set "use_existing": false and provide its full details so we can create it!
+        Rules:
+        - "day" must be a number 0..6 (Monday=0, Sunday=6).
+        - You CAN reference existing ExMoveIDs if they fit.
+        - For any newly created exercise (use_existing=false) you MUST include "progress_type" set to EXACTLY "increase" or "decrease" (lowercase, no other values). Use "increase" when doing MORE of the metric is better (e.g. most strength moves). Use "decrease" when doing LESS is better (e.g. running 1km faster — lower time is better).
+        - For any newly created exercise you MUST include "suggest_set_amount" as a short string in the format "int-int" (e.g. "3-5"), representing the suggested range of sets universally appropriate for that exercise.
         `;
 
         // 3. Call Google Gemini API (Free alternative)
@@ -671,15 +715,19 @@ app.post('/api/workout-plan/auto-generate', authenticateToken, async (req, res) 
 
                 if (ex.use_existing && ex.ex_move_id) {
                     currentExId = ex.ex_move_id;
-                } else if (ex.description && ex.steps) {
+                } else if (ex.description) {
                     // AI created a brand new exercise! Insert it into ExerciseMoves first
                     const caution = ex.caution || null;
-                    const recType = ex.record_type || 'Weight';
-                    const progType = ex.progress_type || 'Volume';
-                    
+                    const recType = ex.record_type || 'weight';
+                    const rawProg = (ex.progress_type || '').toString().toLowerCase();
+                    const progType = (rawProg === 'increase' || rawProg === 'decrease') ? rawProg : 'increase';
+                    const suggest = ex.suggest_set_amount && /^\s*\d+\s*-\s*\d+\s*$/.test(ex.suggest_set_amount)
+                        ? ex.suggest_set_amount.replace(/\s+/g, '')
+                        : null;
+
                     const [newExRes] = await conn.query(
-                        'INSERT INTO ExerciseMoves (Steps, Description, Caution, Accessibility, UserID, RecordType, ProgressType) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                        [ex.steps, ex.description, caution, 'public', req.user.id, recType, progType]
+                        'INSERT INTO ExerciseMoves (Steps, Description, Caution, Accessibility, UserID, RecordType, ProgressType, SuggestSetAmount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                        [ex.steps || null, ex.description, caution, 'public', req.user.id, recType, progType, suggest]
                     );
                     currentExId = newExRes.insertId;
                 }
@@ -713,8 +761,9 @@ app.get('/api/workout-plan', authenticateToken, async (req, res) => {
                 wp.Type,
                 wr.WorkingDayID,
                 d.Day,
-                em.ExMoveID, 
-                em.Description AS ExerciseName
+                em.ExMoveID,
+                em.Description AS ExerciseName,
+                em.SuggestSetAmount AS ExerciseSuggestSetAmount
             FROM WorkoutPlan wp
             LEFT JOIN WorkoutRoutine wr ON wp.PlanID = wr.PlanID
             LEFT JOIN WorkingDay d ON wr.WorkingDayID = d.WorkingDayID
@@ -753,7 +802,8 @@ app.get('/api/workout-plan', authenticateToken, async (req, res) => {
                     if (!exerciseExists) {
                         dayEntry.exercises.push({
                             ex_move_id: row.ExMoveID,
-                            name: row.ExerciseName
+                            name: row.ExerciseName,
+                            suggest_set_amount: row.ExerciseSuggestSetAmount || null
                         });
                     }
                 }
@@ -780,8 +830,9 @@ app.get('/api/workout-plan/:id', authenticateToken, async (req, res) => {
                 wp.Type,
                 wr.WorkingDayID,
                 d.Day,
-                em.ExMoveID, 
-                em.Description AS ExerciseName
+                em.ExMoveID,
+                em.Description AS ExerciseName,
+                em.SuggestSetAmount AS ExerciseSuggestSetAmount
             FROM WorkoutPlan wp
             LEFT JOIN WorkoutRoutine wr ON wp.PlanID = wr.PlanID
             LEFT JOIN WorkingDay d ON wr.WorkingDayID = d.WorkingDayID
@@ -823,7 +874,8 @@ app.get('/api/workout-plan/:id', authenticateToken, async (req, res) => {
                     if (!exerciseExists) {
                         dayEntry.exercises.push({
                             ex_move_id: row.ExMoveID,
-                            name: row.ExerciseName
+                            name: row.ExerciseName,
+                            suggest_set_amount: row.ExerciseSuggestSetAmount || null
                         });
                     }
                 }
@@ -1057,6 +1109,45 @@ app.post('/api/workout-plan/:id/send', authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/api/workout/exercise/:id/send', authenticateToken, async (req, res) => {
+    try {
+        const exMoveID = req.params.id;
+        const { receiver_id, receiver_username } = req.body;
+
+        if (!receiver_id || !receiver_username) {
+            return res.status(400).json({ error: "Missing receiver details" });
+        }
+
+        // 1. Verify receiver
+        const [users] = await db.query(
+            'SELECT UserID FROM User WHERE UserID = ? AND Username = ?',
+            [receiver_id, receiver_username]
+        );
+        if (users.length === 0) {
+            return res.status(404).json({ error: "User not found or username doesn't match ID." });
+        }
+        const targetUserID = users[0].UserID;
+
+        // 2. Fetch source exercise move
+        const [rows] = await db.query('SELECT * FROM ExerciseMoves WHERE ExMoveID = ?', [exMoveID]);
+        if (rows.length === 0) {
+            return res.status(404).json({ error: "Exercise not found." });
+        }
+        const ex = rows[0];
+
+        // 3. Duplicate with receiver as owner (silent duplicate allowed)
+        const [result] = await db.query(
+            'INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType, SuggestSetAmount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [ex.Steps || null, ex.Description, ex.Caution || null, ex.URL || null, ex.Accessibility, targetUserID, ex.RecordType, ex.ProgressType, ex.SuggestSetAmount || null]
+        );
+
+        res.status(201).json({ message: "Exercise sent successfully!", ex_move_id: result.insertId });
+    } catch (e) {
+        console.error("Failed to send exercise:", e);
+        res.status(500).json({ error: "Failed to send exercise" });
+    }
+});
+
 app.get('/api/workout/exercise/:id', authenticateToken, async (req, res) => {
     try {
         const exMoveID = req.params.id;
@@ -1096,6 +1187,69 @@ app.get('/api/workout/is-struggle', authenticateToken, async (req, res) => {
     } catch(e) {
         console.error(e);
         res.status(500).json({ error: "Failed to get struggle status" });
+    }
+});
+
+app.get('/api/workout/is-overloadable', authenticateToken, async (req, res) => {
+    try {
+        const exMoveId = req.query.ex_move_id;
+        if (!exMoveId) return res.status(400).json({ error: "ex_move_id is required" });
+
+        // Look up progressType for the move
+        const [exRows] = await db.query('SELECT ProgressType FROM ExerciseMoves WHERE ExMoveID = ?', [exMoveId]);
+        if (exRows.length === 0) return res.status(404).json({ error: "Exercise not found" });
+        const progressType = (exRows[0].ProgressType || 'increase').toLowerCase();
+
+        // 4 most recent completed sessions by this user for this move (most recent first).
+        const [sessionRows] = await db.query(
+            'SELECT SessionID FROM Session WHERE UserID = ? AND ExMoveID = ? ORDER BY SessionDate DESC, SessionID DESC LIMIT 4',
+            [req.user.id, exMoveId]
+        );
+
+        if (sessionRows.length < 4) {
+            return res.status(200).json({ overloadable: false, reason: 'insufficient_data' });
+        }
+
+        // Build chronological (old -> new) list of per-session aggregates.
+        const sessionIds = sessionRows.map(r => r.SessionID).reverse();
+        const aggregates = [];
+        for (const sid of sessionIds) {
+            const [prs] = await db.query('SELECT Weight, Rep, Time FROM PersonalRecord WHERE SessionID = ?', [sid]);
+            const weights = prs.map(p => p.Weight).filter(v => v != null).map(Number);
+            const reps = prs.map(p => p.Rep).filter(v => v != null).map(Number);
+            const times = prs.map(p => p.Time).filter(v => v != null).map(Number);
+            aggregates.push({
+                weight: weights.length ? Math.max(...weights) : null,
+                rep: reps.length ? Math.max(...reps) : null,
+                // For 'increase' progressType, higher time is better (e.g. plank duration).
+                // For 'decrease', lower time is better (e.g. 1km run) — so pick min.
+                time: times.length ? (progressType === 'decrease' ? Math.min(...times) : Math.max(...times)) : null,
+                sets: prs.length
+            });
+        }
+
+        // For each metric, check if any consecutive pair shows improvement.
+        const metrics = ['weight', 'rep', 'time', 'sets'];
+        const improved = (prev, curr) => {
+            if (prev == null || curr == null) return false;
+            return progressType === 'decrease' ? curr < prev : curr > prev;
+        };
+
+        let anyMetricImproved = false;
+        for (const m of metrics) {
+            for (let i = 1; i < aggregates.length; i++) {
+                if (improved(aggregates[i - 1][m], aggregates[i][m])) {
+                    anyMetricImproved = true;
+                    break;
+                }
+            }
+            if (anyMetricImproved) break;
+        }
+
+        res.status(200).json({ overloadable: !anyMetricImproved, progress_type: progressType });
+    } catch (e) {
+        console.error("Failed to check overloadable:", e);
+        res.status(500).json({ error: "Failed to check overload status" });
     }
 });
 
@@ -1217,11 +1371,15 @@ app.get('/api/admin/exercises', authenticateAdmin, async (req, res) => {
 app.put('/api/admin/exercise/:id', authenticateAdmin, async (req, res) => {
     try {
         const exMoveID = req.params.id;
-        const { description, steps, caution, url, record_type, accessibility, progress_type } = req.body;
-        
+        const { description, steps, caution, url, record_type, accessibility, progress_type, suggest_set_amount } = req.body;
+
+        if (progress_type && progress_type !== 'increase' && progress_type !== 'decrease') {
+            return res.status(400).json({ error: "progress_type must be 'increase' or 'decrease'" });
+        }
+
         const [result] = await db.query(
-            'UPDATE ExerciseMoves SET Description = ?, Steps = ?, Caution = ?, URL = ?, RecordType = ?, Accessibility = ?, ProgressType = ? WHERE ExMoveID = ?',
-            [description, steps, caution || null, url || null, record_type, accessibility, progress_type, exMoveID]
+            'UPDATE ExerciseMoves SET Description = ?, Steps = ?, Caution = ?, URL = ?, RecordType = ?, Accessibility = ?, ProgressType = ?, SuggestSetAmount = ? WHERE ExMoveID = ?',
+            [description, steps || null, caution || null, url || null, record_type, accessibility, progress_type, suggest_set_amount || null, exMoveID]
         );
 
         if (result.affectedRows === 0) return res.status(404).json({ error: "Exercise not found" });

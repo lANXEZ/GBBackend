@@ -35,7 +35,8 @@ const keyMap = {
   sessionid: 'SessionID', sessiondate: 'SessionDate', userweight: 'UserWeight', userheight: 'UserHeight',
   prid: 'PRID', trainerid: 'TrainerID',
   clientid: 'ClientID', dobstring: 'DoBString', exercisename: 'ExerciseName',
-  plan_id: 'plan_id', provider_id: 'provider_id'
+  plan_id: 'plan_id', provider_id: 'provider_id',
+  sex: 'Sex', suggestsetamount: 'SuggestSetAmount'
 };
 
 function mapKeys(rows) {
