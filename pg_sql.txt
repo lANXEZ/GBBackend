@@ -1,13 +1,13 @@
 -- Reset the database by dropping existing tables
 -- This avoids the "DROP DATABASE cannot run inside a transaction block" error
-DROP TABLE IF EXISTS PersonalRecord CASCADE;
-DROP TABLE IF EXISTS Session CASCADE;
-DROP TABLE IF EXISTS ExerciseList CASCADE;
-DROP TABLE IF EXISTS WorkoutRoutine CASCADE;
-DROP TABLE IF EXISTS ExerciseMoves CASCADE;
-DROP TABLE IF EXISTS WorkingDay CASCADE;
-DROP TABLE IF EXISTS WorkoutPlan CASCADE;
-DROP TABLE IF EXISTS TrainingList CASCADE;
+DROP TABLE IF EXISTS "PersonalRecord" CASCADE;
+DROP TABLE IF EXISTS "Session" CASCADE;
+DROP TABLE IF EXISTS "ExerciseList" CASCADE;
+DROP TABLE IF EXISTS "WorkoutRoutine" CASCADE;
+DROP TABLE IF EXISTS "ExerciseMoves" CASCADE;
+DROP TABLE IF EXISTS "WorkingDay" CASCADE;
+DROP TABLE IF EXISTS "WorkoutPlan" CASCADE;
+DROP TABLE IF EXISTS "TrainingList" CASCADE;
 DROP TABLE IF EXISTS "User" CASCADE;
 
 -- User Table
@@ -23,7 +23,7 @@ CREATE TABLE "User" (
 );
 
 -- TrainingList Table (NEW: Maps Trainers to Clients)
-CREATE TABLE TrainingList (
+CREATE TABLE "TrainingList" (
     TrainerID BIGINT NOT NULL,
     ClientID BIGINT NOT NULL,
     PRIMARY KEY (TrainerID, ClientID),
@@ -32,24 +32,24 @@ CREATE TABLE TrainingList (
 );
 
 -- WorkoutPlan Table
-CREATE TABLE WorkoutPlan ( 
-    PlanID BIGSERIAL PRIMARY KEY, 
+CREATE TABLE "WorkoutPlan" (
+    PlanID BIGSERIAL PRIMARY KEY,
     PlanName VARCHAR(255) NOT NULL,
-    UserID BIGINT NOT NULL, 
-    Type CHAR(1) NOT NULL, 
+    UserID BIGINT NOT NULL,
+    Type CHAR(1) NOT NULL,
     ProviderID BIGINT,
     FOREIGN KEY (UserID) REFERENCES "User"(UserID),
     FOREIGN KEY (ProviderID) REFERENCES "User"(UserID)
 );
 
 -- WorkingDay Table
-CREATE TABLE WorkingDay ( 
-    WorkingDayID BIGSERIAL PRIMARY KEY, 
-    Day INT NOT NULL 
+CREATE TABLE "WorkingDay" (
+    WorkingDayID BIGSERIAL PRIMARY KEY,
+    Day INT NOT NULL
 );
 
 -- ExerciseMoves Table
-CREATE TABLE ExerciseMoves (
+CREATE TABLE "ExerciseMoves" (
     ExMoveID BIGSERIAL PRIMARY KEY,
     Steps TEXT,
     Description TEXT NOT NULL,
@@ -64,45 +64,45 @@ CREATE TABLE ExerciseMoves (
 );
 
 -- WorkoutRoutine Table (Joining Table - No Auto Increment needed for composite PK)
-CREATE TABLE WorkoutRoutine ( 
-    PlanID BIGINT NOT NULL, 
-    WorkingDayID BIGINT NOT NULL, 
+CREATE TABLE "WorkoutRoutine" (
+    PlanID BIGINT NOT NULL,
+    WorkingDayID BIGINT NOT NULL,
     PRIMARY KEY (PlanID, WorkingDayID),
-    FOREIGN KEY (PlanID) REFERENCES WorkoutPlan(PlanID) ON DELETE CASCADE,
-    FOREIGN KEY (WorkingDayID) REFERENCES WorkingDay(WorkingDayID) ON DELETE CASCADE
+    FOREIGN KEY (PlanID) REFERENCES "WorkoutPlan"(PlanID) ON DELETE CASCADE,
+    FOREIGN KEY (WorkingDayID) REFERENCES "WorkingDay"(WorkingDayID) ON DELETE CASCADE
 );
 
 -- ExerciseList Table (Joining Table - No Auto Increment needed for composite PK)
-CREATE TABLE ExerciseList ( 
-    WorkingDayID BIGINT NOT NULL, 
-    ExMoveID BIGINT NOT NULL, 
+CREATE TABLE "ExerciseList" (
+    WorkingDayID BIGINT NOT NULL,
+    ExMoveID BIGINT NOT NULL,
     PRIMARY KEY (WorkingDayID, ExMoveID),
-    FOREIGN KEY (WorkingDayID) REFERENCES WorkingDay(WorkingDayID) ON DELETE CASCADE,
-    FOREIGN KEY (ExMoveID) REFERENCES ExerciseMoves(ExMoveID) ON DELETE CASCADE
+    FOREIGN KEY (WorkingDayID) REFERENCES "WorkingDay"(WorkingDayID) ON DELETE CASCADE,
+    FOREIGN KEY (ExMoveID) REFERENCES "ExerciseMoves"(ExMoveID) ON DELETE CASCADE
 );
 
 -- Session Table (UPDATED: Renamed to UserWeight and UserHeight)
-CREATE TABLE Session ( 
-    SessionID BIGSERIAL PRIMARY KEY, 
-    UserID BIGINT NOT NULL, 
-    WorkingDayID BIGINT NOT NULL, 
+CREATE TABLE "Session" (
+    SessionID BIGSERIAL PRIMARY KEY,
+    UserID BIGINT NOT NULL,
+    WorkingDayID BIGINT NOT NULL,
     ExMoveID BIGINT NOT NULL,
     SessionDate DATE NOT NULL,
     UserWeight DECIMAL(5,2),
     UserHeight DECIMAL(5,2),
     FOREIGN KEY (UserID) REFERENCES "User"(UserID) ON DELETE CASCADE,
-    FOREIGN KEY (WorkingDayID, ExMoveID) REFERENCES ExerciseList(WorkingDayID, ExMoveID) ON DELETE CASCADE
+    FOREIGN KEY (WorkingDayID, ExMoveID) REFERENCES "ExerciseList"(WorkingDayID, ExMoveID) ON DELETE CASCADE
 );
 
 -- PersonalRecord Table
 -- Note: Weight is DECIMAL(5,2) which allows max 999.99kg.
-CREATE TABLE PersonalRecord ( 
-    PRID BIGSERIAL PRIMARY KEY, 
-    SessionID BIGINT NOT NULL, 
-    Weight DECIMAL(5,2), 
-    Rep INT, 
-    Time INT, 
-    FOREIGN KEY (SessionID) REFERENCES Session(SessionID) ON DELETE CASCADE
+CREATE TABLE "PersonalRecord" (
+    PRID BIGSERIAL PRIMARY KEY,
+    SessionID BIGINT NOT NULL,
+    Weight DECIMAL(5,2),
+    Rep INT,
+    Time INT,
+    FOREIGN KEY (SessionID) REFERENCES "Session"(SessionID) ON DELETE CASCADE
 );
 
 -- --------------------------------------------------------
@@ -117,38 +117,38 @@ INSERT INTO "User" (Username, Password, FirstName, LastName, DoB, Status, Sex) V
 ('testclient', 'password', 'Jane', 'Client', '2002-02-20', 'training client', 'f');
 
 -- 2. TrainingList Table (NEW: ID 3 is trainer, ID 4 is client)
-INSERT INTO TrainingList (TrainerID, ClientID) VALUES
+INSERT INTO "TrainingList" (TrainerID, ClientID) VALUES
 (3, 4);
 
 -- 3. WorkoutPlan Table (IDs: 1, 2, 3)
-INSERT INTO WorkoutPlan (UserID, PlanName, Type, ProviderID) VALUES
-(1,' Plan A' , 'C', 1), 
-(2,' Plan B', 'C', 3), 
-(4,' Plan C', 'P', 3); 
+INSERT INTO "WorkoutPlan" (UserID, PlanName, Type, ProviderID) VALUES
+(1,' Plan A' , 'C', 1),
+(2,' Plan B', 'C', 3),
+(4,' Plan C', 'P', 3);
 
 -- 4. WorkingDay Table (IDs: 1, 2, 3)
-INSERT INTO WorkingDay (Day) VALUES
+INSERT INTO "WorkingDay" (Day) VALUES
 (0), -- Monday
 (2), -- Wednesday
 (4); -- Friday
 
 -- 5. ExerciseMoves Table (IDs: 1, 2, 3, 4, 5)
-INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType, SuggestSetAmount) VALUES
+INSERT INTO "ExerciseMoves" (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType, SuggestSetAmount) VALUES
 ('1. Grab campus rung. 2. Pull up dynamically.', 'Campus Board Lache', 'Warm up shoulders.', NULL, 'public', NULL, 'rep', 'increase', '3-5'),
 ('1. Hang from bar. 2. Pull chin over bar.', 'Standard Pull-up', NULL, NULL, 'public', NULL, 'rep', 'increase', '3-5'),
 ('1. Set timer. 2. Hold plank position.', 'Core Plank', 'Keep back straight.', '10101010', 'private', 1, 'time', 'increase', '2-4'),
 ('1. Unrack bar. 2. Lower to chest. 3. Press up.', 'Barbell Bench Press', 'Use a spotter for heavy sets.', NULL, 'public', NULL, 'weight', 'increase', '4-6'),
 ('1. Rest bar on traps. 2. Squat down. 3. Stand up.', 'Barbell Squat', 'Maintain neutral spine.', NULL, 'public', NULL, 'weight', 'increase', '4-6');
 
--- 6. WorkoutRoutine Table 
-INSERT INTO WorkoutRoutine (PlanID, WorkingDayID) VALUES
+-- 6. WorkoutRoutine Table
+INSERT INTO "WorkoutRoutine" (PlanID, WorkingDayID) VALUES
 (1, 1),
 (1, 2),
 (2, 3),
 (3, 1);
 
--- 7. ExerciseList Table 
-INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES
+-- 7. ExerciseList Table
+INSERT INTO "ExerciseList" (WorkingDayID, ExMoveID) VALUES
 (1, 1), -- Day 1: Lache
 (1, 2), -- Day 1: Pull-up
 (1, 4), -- Day 1: Bench Press
@@ -157,7 +157,7 @@ INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES
 (3, 2); -- Day 3: Pull-up
 
 -- 8. Session Table (UPDATED: Using UserWeight and UserHeight)
-INSERT INTO Session (UserID, WorkingDayID, ExMoveID, SessionDate, UserWeight, UserHeight) VALUES
+INSERT INTO "Session" (UserID, WorkingDayID, ExMoveID, SessionDate, UserWeight, UserHeight) VALUES
 (2, 1, 1, '2026-03-16', 82.50, 180.00), -- Session 1: John doing Campus Board Laches
 (2, 1, 2, '2026-03-16', 82.50, 180.00), -- Session 2: John doing Pull-ups
 (4, 1, 2, '2026-03-14', 62.00, 165.00), -- Session 3: Jane doing Pull-ups
@@ -166,62 +166,62 @@ INSERT INTO Session (UserID, WorkingDayID, ExMoveID, SessionDate, UserWeight, Us
 (2, 1, 5, '2026-03-16', 82.50, 180.00); -- Session 6: John doing Squats
 
 -- 9. PersonalRecord Table (The Sets for each Session)
-INSERT INTO PersonalRecord (SessionID, Weight, Rep, Time) VALUES
-(5, 20.00, 15, NULL),  
-(5, 40.00, 10, NULL),  
-(5, 60.00,  8, NULL),  
-(5, 80.00,  5, NULL),  
-(5, 85.00,  5, NULL),  
-(5, 90.00,  3, NULL),  
-(5, 95.00,  1, NULL),  
-(5, 60.00, 12, NULL),  
+INSERT INTO "PersonalRecord" (SessionID, Weight, Rep, Time) VALUES
+(5, 20.00, 15, NULL),
+(5, 40.00, 10, NULL),
+(5, 60.00,  8, NULL),
+(5, 80.00,  5, NULL),
+(5, 85.00,  5, NULL),
+(5, 90.00,  3, NULL),
+(5, 95.00,  1, NULL),
+(5, 60.00, 12, NULL),
 
-(6, 20.00, 10, NULL),  
-(6, 60.00,  8, NULL),  
-(6, 80.00,  5, NULL),  
-(6, 80.00,  5, NULL),  
-(6, 80.00,  5, NULL),  
-(6, 80.00,  5, NULL),  
-(6, 80.00,  5, NULL),  
+(6, 20.00, 10, NULL),
+(6, 60.00,  8, NULL),
+(6, 80.00,  5, NULL),
+(6, 80.00,  5, NULL),
+(6, 80.00,  5, NULL),
+(6, 80.00,  5, NULL),
+(6, 80.00,  5, NULL),
 
-(2, NULL,  12, NULL),  
-(2, 5.00,  10, NULL),  
-(2, 10.00,  8, NULL),  
-(2, 15.00,  5, NULL),  
-(2, 20.00,  3, NULL),  
+(2, NULL,  12, NULL),
+(2, 5.00,  10, NULL),
+(2, 10.00,  8, NULL),
+(2, 15.00,  5, NULL),
+(2, 20.00,  3, NULL),
 
-(4, NULL, NULL, 120),  
-(4, NULL, NULL, 90),   
-(4, NULL, NULL, 60),   
-(4, NULL, NULL, 45),   
+(4, NULL, NULL, 120),
+(4, NULL, NULL, 90),
+(4, NULL, NULL, 60),
+(4, NULL, NULL, 45),
 
-(1, NULL, 8, NULL),    
-(1, NULL, 8, NULL),    
-(1, NULL, 6, NULL),    
+(1, NULL, 8, NULL),
+(1, NULL, 8, NULL),
+(1, NULL, 6, NULL),
 
-(3, NULL, 5, NULL),    
-(3, NULL, 4, NULL),    
-(3, NULL, 3, NULL),    
-(3, NULL, 3, NULL);    
+(3, NULL, 5, NULL),
+(3, NULL, 4, NULL),
+(3, NULL, 3, NULL),
+(3, NULL, 3, NULL);
 
 -- --------------------------------------------------------
 -- ADDITIONAL MOCK DATA INSERTS
 -- --------------------------------------------------------
 
 -- 10. WorkoutPlan Table (Adding IDs: 4, 5, 6)
-INSERT INTO WorkoutPlan (UserID, PlanName, Type, ProviderID) VALUES
+INSERT INTO "WorkoutPlan" (UserID, PlanName, Type, ProviderID) VALUES
 (2, 'Push Day Routine', 'C', 2),
 (2, 'Pull Day Routine', 'C', 2),
 (2, 'Leg Day Routine', 'C', 2);
 
 -- 11. WorkingDay Table (Adding IDs: 4, 5, 6)
-INSERT INTO WorkingDay (Day) VALUES
-(1), -- Tuesday 
-(3), -- Thursday 
-(5); -- Saturday 
+INSERT INTO "WorkingDay" (Day) VALUES
+(1), -- Tuesday
+(3), -- Thursday
+(5); -- Saturday
 
 -- 12. ExerciseMoves Table (Adding IDs: 6 to 12)
-INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType, SuggestSetAmount) VALUES
+INSERT INTO "ExerciseMoves" (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType, SuggestSetAmount) VALUES
 ('1. Hinge at hips. 2. Grip bar. 3. Stand up straight with bar.', 'Barbell Deadlift', 'Keep back flat to avoid injury.', NULL, 'public', NULL, 'weight', 'increase', '3-5'),
 ('1. Sit at machine. 2. Grab wide bar. 3. Pull down to upper chest.', 'Lat Pulldown', 'Do not lean back too far.', NULL, 'public', NULL, 'weight', 'increase', '3-4'),
 ('1. Hold dumbbells. 2. Curl weight up to shoulders. 3. Lower controlled.', 'Dumbbell Bicep Curl', 'Avoid swinging torso.', NULL, 'public', NULL, 'weight', 'increase', '3-4'),
@@ -230,40 +230,40 @@ INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, User
 ('1. Sit in machine. 2. Place feet on platform. 3. Press weight up.', 'Machine Leg Press', 'Do not lock out knees entirely.', NULL, 'public', NULL, 'weight', 'increase', '3-5'),
 ('1. Step forward. 2. Lower hips until both knees are bent at 90 degrees.', 'Dumbbell Walking Lunges', 'Keep front knee behind toes.', NULL, 'public', NULL, 'weight', 'increase', '3-4');
 
--- 13. WorkoutRoutine Table 
-INSERT INTO WorkoutRoutine (PlanID, WorkingDayID) VALUES
-(4, 4), 
-(5, 5), 
-(6, 6); 
+-- 13. WorkoutRoutine Table
+INSERT INTO "WorkoutRoutine" (PlanID, WorkingDayID) VALUES
+(4, 4),
+(5, 5),
+(6, 6);
 
--- 14. ExerciseList Table 
-INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES
-(4, 4),  
-(4, 9),  
-(4, 10), 
-(5, 2),  
-(5, 7),  
-(5, 8),  
-(6, 5),  
-(6, 6),  
-(6, 11), 
-(6, 12); 
+-- 14. ExerciseList Table
+INSERT INTO "ExerciseList" (WorkingDayID, ExMoveID) VALUES
+(4, 4),
+(4, 9),
+(4, 10),
+(5, 2),
+(5, 7),
+(5, 8),
+(6, 5),
+(6, 6),
+(6, 11),
+(6, 12);
 
 -- 15. Session Table (UPDATED: Adding IDs: 7 to 16, Using UserWeight and UserHeight)
-INSERT INTO Session (UserID, WorkingDayID, ExMoveID, SessionDate, UserWeight, UserHeight) VALUES
-(2, 4, 4, '2026-03-17', 82.50, 180.00), 
-(2, 4, 9, '2026-03-17', 82.50, 180.00),  
-(2, 4, 10, '2026-03-17', 82.50, 180.00), 
-(2, 5, 2, '2026-03-19', 82.50, 180.00),  
-(2, 5, 7, '2026-03-19', 82.50, 180.00),  
-(2, 5, 8, '2026-03-19', 82.50, 180.00),  
-(2, 6, 5, '2026-03-21', 82.50, 180.00),  
-(2, 6, 6, '2026-03-21', 82.50, 180.00),  
-(2, 6, 11, '2026-03-21', 82.50, 180.00), 
-(2, 6, 12, '2026-03-21', 82.50, 180.00); 
+INSERT INTO "Session" (UserID, WorkingDayID, ExMoveID, SessionDate, UserWeight, UserHeight) VALUES
+(2, 4, 4, '2026-03-17', 82.50, 180.00),
+(2, 4, 9, '2026-03-17', 82.50, 180.00),
+(2, 4, 10, '2026-03-17', 82.50, 180.00),
+(2, 5, 2, '2026-03-19', 82.50, 180.00),
+(2, 5, 7, '2026-03-19', 82.50, 180.00),
+(2, 5, 8, '2026-03-19', 82.50, 180.00),
+(2, 6, 5, '2026-03-21', 82.50, 180.00),
+(2, 6, 6, '2026-03-21', 82.50, 180.00),
+(2, 6, 11, '2026-03-21', 82.50, 180.00),
+(2, 6, 12, '2026-03-21', 82.50, 180.00);
 
 -- 16. PersonalRecord Table (Adding sets for the new sessions)
-INSERT INTO PersonalRecord (SessionID, Weight, Rep, Time) VALUES
+INSERT INTO "PersonalRecord" (SessionID, Weight, Rep, Time) VALUES
 (8, 20.00, 10, NULL),
 (8, 40.00,  8, NULL),
 (8, 40.00,  8, NULL),
@@ -296,15 +296,15 @@ INSERT INTO PersonalRecord (SessionID, Weight, Rep, Time) VALUES
 -- --------------------------------------------------------
 
 -- 17. WorkoutPlan Table (Adding ID: 7)
-INSERT INTO WorkoutPlan (UserID, PlanName, Type, ProviderID) VALUES
+INSERT INTO "WorkoutPlan" (UserID, PlanName, Type, ProviderID) VALUES
 (3, 'Trainer Advanced Conditioning', 'C', 3);
 
 -- 18. WorkingDay Table (Adding ID: 7)
-INSERT INTO WorkingDay (Day) VALUES
-(6); -- Sunday 
+INSERT INTO "WorkingDay" (Day) VALUES
+(6); -- Sunday
 
 -- 19. ExerciseMoves Table (Adding IDs: 13 to 17)
-INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType, SuggestSetAmount) VALUES
+INSERT INTO "ExerciseMoves" (Steps, Description, Caution, URL, Accessibility, UserID, RecordType, ProgressType, SuggestSetAmount) VALUES
 ('1. Grip rings. 2. Pull up explosively. 3. Transition shoulders over rings. 4. Dip.', 'Ring Muscle-up', 'Requires significant shoulder mobility.', NULL, 'public', NULL, 'rep', 'increase', '3-5'),
 ('1. Hinge to grip bar. 2. Explosively extend hips. 3. Catch bar on shoulders.', 'Barbell Power Clean', 'Keep bar path close to body.', NULL, 'public', NULL, 'weight', 'increase', '4-6'),
 ('1. Support knee/hand on bench. 2. Pull dumbbell to hip.', 'Single-arm Dumbbell Row', 'Keep back flat, avoid twisting.', NULL, 'public', NULL, 'weight', 'increase', '3-4'),
@@ -312,36 +312,36 @@ INSERT INTO ExerciseMoves (Steps, Description, Caution, URL, Accessibility, User
 ('1. Stand facing box. 2. Swing arms back. 3. Jump and land softly on box.', 'Plyometric Box Jumps', 'Step down carefully, do not jump backward.', NULL, 'public', NULL, 'rep', 'increase', '3-5');
 
 -- 20. WorkoutRoutine Table
-INSERT INTO WorkoutRoutine (PlanID, WorkingDayID) VALUES
-(7, 7), 
-(3, 2), 
-(3, 3); 
+INSERT INTO "WorkoutRoutine" (PlanID, WorkingDayID) VALUES
+(7, 7),
+(3, 2),
+(3, 3);
 
 -- 21. ExerciseList Table
-INSERT INTO ExerciseList (WorkingDayID, ExMoveID) VALUES
-(7, 13), 
-(7, 14), 
-(7, 5),  
-(2, 15), 
-(2, 16), 
-(3, 17), 
-(3, 12), 
-(3, 7);  
+INSERT INTO "ExerciseList" (WorkingDayID, ExMoveID) VALUES
+(7, 13),
+(7, 14),
+(7, 5),
+(2, 15),
+(2, 16),
+(3, 17),
+(3, 12),
+(3, 7);
 
 -- 22. Session Table (UPDATED: Adding IDs: 17 to 25, Using UserWeight and UserHeight)
-INSERT INTO Session (UserID, WorkingDayID, ExMoveID, SessionDate, UserWeight, UserHeight) VALUES
-(3, 7, 13, '2026-03-22', 88.00, 178.50), 
-(3, 7, 14, '2026-03-22', 88.00, 178.50), 
-(3, 7, 5,  '2026-03-22', 88.00, 178.50), 
-(4, 2, 15, '2026-03-18', 62.00, 165.00), 
-(4, 2, 16, '2026-03-18', 62.00, 165.00), 
-(4, 2, 3,  '2026-03-18', 62.00, 165.00), 
-(4, 3, 17, '2026-03-20', 62.00, 165.00), 
-(4, 3, 12, '2026-03-20', 62.00, 165.00), 
-(4, 3, 7,  '2026-03-20', 62.00, 165.00); 
+INSERT INTO "Session" (UserID, WorkingDayID, ExMoveID, SessionDate, UserWeight, UserHeight) VALUES
+(3, 7, 13, '2026-03-22', 88.00, 178.50),
+(3, 7, 14, '2026-03-22', 88.00, 178.50),
+(3, 7, 5,  '2026-03-22', 88.00, 178.50),
+(4, 2, 15, '2026-03-18', 62.00, 165.00),
+(4, 2, 16, '2026-03-18', 62.00, 165.00),
+(4, 2, 3,  '2026-03-18', 62.00, 165.00),
+(4, 3, 17, '2026-03-20', 62.00, 165.00),
+(4, 3, 12, '2026-03-20', 62.00, 165.00),
+(4, 3, 7,  '2026-03-20', 62.00, 165.00);
 
 -- 23. PersonalRecord Table (Logging the sets for Users 2 & 3)
-INSERT INTO PersonalRecord (SessionID, Weight, Rep, Time) VALUES
+INSERT INTO "PersonalRecord" (SessionID, Weight, Rep, Time) VALUES
 (17, NULL, 5, NULL),
 (17, NULL, 5, NULL),
 (17, NULL, 4, NULL),
