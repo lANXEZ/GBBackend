@@ -10,6 +10,19 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 app.use(express.json());
+// Helper: turn a thrown error into the right Express response.
+// If db.js wrapped it as DB_UNAVAILABLE (Supabase paused, network blip, etc.),
+// reply with 503 + a stable error code so the frontend can show a friendlier message.
+function sendErrorResponse(res, err, fallbackMessage) {
+  if (err && err.code === 'DB_UNAVAILABLE') {
+    return res.status(503).json({
+      error: err.message || 'Database is currently unavailable. Please try again in a moment.',
+      code: 'DB_UNAVAILABLE'
+    });
+  }
+  return res.status(500).json({ error: fallbackMessage || 'Internal server error' });
+}
+
 
 const jwt = require('jsonwebtoken');
 const db = require('./db');
@@ -64,7 +77,7 @@ app.post('/api/login', async (req, res) => {
         }
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Something went wrong. Please try again later." });
+        sendErrorResponse(res, e, "Something went wrong. Please try again later.");
     }
 });
 
@@ -108,7 +121,7 @@ app.post('/api/register', async (req, res) => {
         });
     } catch (e) {
         console.error("Failed to register user:", e);
-        res.status(500).json({ error: "Failed to register user" });
+        sendErrorResponse(res, e, "Failed to register user");
     }
 });
 
@@ -122,7 +135,7 @@ app.get('/api/user/check-username', async (req, res) => {
         res.status(200).json({ available: rows.length === 0 });
     } catch (e) {
         console.error("Failed to check username:", e);
-        res.status(500).json({ error: "Failed to check username" });
+        sendErrorResponse(res, e, "Failed to check username");
     }
 });
 
@@ -142,7 +155,7 @@ app.post('/api/user/unsubscribe', authenticateToken, async (req, res) => {
     } catch (e) {
         if (conn) { try { await conn.rollback(); } catch (_) {} }
         console.error("Failed to unsubscribe:", e);
-        res.status(500).json({ error: "Failed to unsubscribe" });
+        sendErrorResponse(res, e, "Failed to unsubscribe");
     } finally {
         if (conn) conn.release();
     }
@@ -183,7 +196,7 @@ app.post('/api/user/change-password', async (req, res) => {
         res.status(200).json({ message: "Password changed successfully" });
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to change password" });
+        sendErrorResponse(res, e, "Failed to change password");
     }
 });
 
@@ -202,7 +215,7 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
         res.status(200).json(user);
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to fetch user profile" });
+        sendErrorResponse(res, e, "Failed to fetch user profile");
     }
 });
 
@@ -218,7 +231,7 @@ app.get('/api/coach/clients', authenticateToken, async (req, res) => {
         res.status(200).json(rows);
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to fetch clients" });
+        sendErrorResponse(res, e, "Failed to fetch clients");
     }
 });
 
@@ -256,7 +269,7 @@ app.post('/api/coach/invite', authenticateToken, async (req, res) => {
         res.status(201).json({ message: "Client added successfully" });
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to invite client" });
+        sendErrorResponse(res, e, "Failed to invite client");
     }
 });
 
@@ -273,7 +286,7 @@ app.delete('/api/coach/client/:id', authenticateToken, async (req, res) => {
         res.status(200).json({ message: "Client removed successfully" });
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to remove client" });
+        sendErrorResponse(res, e, "Failed to remove client");
     }
 });
 
@@ -296,7 +309,7 @@ app.post('/api/workout/create-exercise', authenticateToken, async (req, res) => 
         res.status(201).json({ message: "Exercise created successfully", ex_move_id: result.insertId });
     } catch (e) {
         console.error("Failed to create exercise:", e);
-        res.status(500).json({ error: "Failed to create exercise" });
+        sendErrorResponse(res, e, "Failed to create exercise");
     }
 });
 
@@ -306,7 +319,7 @@ app.get('/api/workout/fetch-public-exercise-move', authenticateToken, async (req
         res.status(200).json(rows);
     } catch (e) {
         console.error("Failed to fetch public exercises:", e);
-        res.status(500).json({ error: "Failed to fetch public exercises" });
+        sendErrorResponse(res, e, "Failed to fetch public exercises");
     }
 });
 
@@ -316,7 +329,7 @@ app.get('/api/workout/exercises', authenticateToken, async (req, res) => {
         res.status(200).json(rows);
     } catch (e) {
         console.error("Failed to fetch exercises:", e);
-        res.status(500).json({ error: "Failed to fetch exercises" });
+        sendErrorResponse(res, e, "Failed to fetch exercises");
     }
 });
 
@@ -340,7 +353,7 @@ app.put('/api/workout/exercise/:id', authenticateToken, async (req, res) => {
         res.status(200).json({ message: "Exercise updated successfully" });
     } catch (e) {
         console.error("Failed to update exercise:", e);
-        res.status(500).json({ error: "Failed to update exercise" });
+        sendErrorResponse(res, e, "Failed to update exercise");
     }
 });
 
@@ -355,7 +368,7 @@ app.delete('/api/workout/exercise/:id', authenticateToken, async (req, res) => {
         res.status(200).json({ message: "Exercise deleted successfully" });
     } catch (e) {
         console.error("Failed to delete exercise:", e);
-        res.status(500).json({ error: "Failed to delete exercise" });
+        sendErrorResponse(res, e, "Failed to delete exercise");
     }
 });
 
@@ -420,7 +433,7 @@ app.post('/api/workout/save', authenticateToken, async (req, res) => {
         res.status(201).json({ workout_id: prID });
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to save workout" });
+        sendErrorResponse(res, e, "Failed to save workout");
     }
 });
 
@@ -455,7 +468,7 @@ app.get('/api/workout/fetch', authenticateToken, async (req, res) => {
         res.status(200).json(rows);
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to fetch workouts" });
+        sendErrorResponse(res, e, "Failed to fetch workouts");
     }
 });
 
@@ -472,7 +485,7 @@ app.get('/api/workout/recent-body-stats', authenticateToken, async (req, res) =>
         }
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to fetch recent body stats" });
+        sendErrorResponse(res, e, "Failed to fetch recent body stats");
     }
 });
 
@@ -486,7 +499,7 @@ app.get('/api/workout/body-stats-history', authenticateToken, async (req, res) =
         res.status(200).json(rows);
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to fetch body stats history" });
+        sendErrorResponse(res, e, "Failed to fetch body stats history");
     }
 });
 
@@ -501,7 +514,7 @@ app.get('/api/workout/today-completed', authenticateToken, async (req, res) => {
         res.status(200).json(completedIds);
     } catch (e) {
         console.error("Failed to fetch today completed:", e);
-        res.status(500).json({ error: "Failed to fetch today's completed workouts" });
+        sendErrorResponse(res, e, "Failed to fetch today's completed workouts");
     }
 });
 
@@ -526,7 +539,7 @@ app.get('/api/workout/recent-plan', authenticateToken, async (req, res) => {
         res.status(200).json({ plan_id: rows[0].PlanID });
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to fetch recent workout plan id" });
+        sendErrorResponse(res, e, "Failed to fetch recent workout plan id");
     }
 });
 
@@ -583,7 +596,7 @@ app.post('/api/workout-plan/create', authenticateToken, async (req, res) => {
     } catch (e) {
         if (conn) { try { await conn.rollback(); } catch (_) {} }
         console.error("Failed to create workout plan:", e);
-        res.status(500).json({ error: "Failed to create workout plan" });
+        sendErrorResponse(res, e, "Failed to create workout plan");
     } finally {
         if (conn) conn.release();
     }
@@ -746,7 +759,7 @@ app.post('/api/workout-plan/auto-generate', authenticateToken, async (req, res) 
     } catch (e) {
         if (conn) { try { await conn.rollback(); } catch (_) {} }
         console.error("Failed to auto-generate workout plan:", e);
-        res.status(500).json({ error: e.message || "Failed to auto-generate workout plan" });
+        sendErrorResponse(res, e, e.message || "Failed to auto-generate workout plan");
     } finally {
         if (conn) conn.release();
     }
@@ -817,7 +830,7 @@ app.get('/api/workout-plan', authenticateToken, async (req, res) => {
         res.status(200).json(result);
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to fetch workout plans" });
+        sendErrorResponse(res, e, "Failed to fetch workout plans");
     }
 });
 
@@ -889,7 +902,7 @@ app.get('/api/workout-plan/:id', authenticateToken, async (req, res) => {
         res.status(200).json(result[0]);
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to fetch workout plan" });
+        sendErrorResponse(res, e, "Failed to fetch workout plan");
     }
 });
 
@@ -973,7 +986,7 @@ app.put('/api/workout-plan/:id', authenticateToken, async (req, res) => {
     } catch (e) {
         if (conn) { try { await conn.rollback(); } catch (_) {} }
         console.error("Failed to update workout plan:", e);
-        res.status(500).json({ error: "Failed to update workout plan" });
+        sendErrorResponse(res, e, "Failed to update workout plan");
     } finally {
         if (conn) conn.release();
     }
@@ -1015,7 +1028,7 @@ app.delete('/api/workout-plan/:id', authenticateToken, async (req, res) => {
         res.status(200).json({ message: "Workout plan deleted successfully" });
     } catch (e) {
         console.error("Failed to delete workout plan:", e);
-        res.status(500).json({ error: "Failed to delete workout plan" });
+        sendErrorResponse(res, e, "Failed to delete workout plan");
     }
 });
 
@@ -1108,7 +1121,7 @@ app.post('/api/workout-plan/:id/send', authenticateToken, async (req, res) => {
     } catch (e) {
         if (conn) { try { await conn.rollback(); } catch (_) {} }
         console.error("Failed to send plan:", e);
-        res.status(500).json({ error: "Failed to send plan" });
+        sendErrorResponse(res, e, "Failed to send plan");
     } finally {
         if (conn) conn.release();
     }
@@ -1149,7 +1162,7 @@ app.post('/api/workout/exercise/:id/send', authenticateToken, async (req, res) =
         res.status(201).json({ message: "Exercise sent successfully!", ex_move_id: result.insertId });
     } catch (e) {
         console.error("Failed to send exercise:", e);
-        res.status(500).json({ error: "Failed to send exercise" });
+        sendErrorResponse(res, e, "Failed to send exercise");
     }
 });
 
@@ -1165,7 +1178,7 @@ app.get('/api/workout/exercise/:id', authenticateToken, async (req, res) => {
         res.status(200).json(rows[0]);
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to fetch exercise details" });
+        sendErrorResponse(res, e, "Failed to fetch exercise details");
     }
 });
 
@@ -1191,7 +1204,7 @@ app.get('/api/workout/is-struggle', authenticateToken, async (req, res) => {
         res.status(200).json({ struggling: avgReps < 5 });
     } catch(e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to get struggle status" });
+        sendErrorResponse(res, e, "Failed to get struggle status");
     }
 });
 
@@ -1254,7 +1267,7 @@ app.get('/api/workout/is-overloadable', authenticateToken, async (req, res) => {
         res.status(200).json({ overloadable: !anyMetricImproved, progress_type: progressType });
     } catch (e) {
         console.error("Failed to check overloadable:", e);
-        res.status(500).json({ error: "Failed to check overload status" });
+        sendErrorResponse(res, e, "Failed to check overload status");
     }
 });
 
@@ -1288,7 +1301,7 @@ app.post('/api/user/upgrade', authenticateToken, async (req, res) => {
         res.status(200).json({ message: "Upgraded successfully", auth_token: token, user: payload });
     } catch (e) {
         console.error("Failed to upgrade user:", e);
-        res.status(500).json({ error: "Failed to upgrade user" });
+        sendErrorResponse(res, e, "Failed to upgrade user");
     }
 });
 
@@ -1324,7 +1337,7 @@ app.get('/api/workout/performance-graph', authenticateToken, async (req, res) =>
         res.send(buffer);
     } catch(e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to generate image" });
+        sendErrorResponse(res, e, "Failed to generate image");
     }
 });
 
@@ -1345,7 +1358,7 @@ app.get('/api/admin/users', authenticateAdmin, async (req, res) => {
         res.status(200).json(rows);
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to fetch users" });
+        sendErrorResponse(res, e, "Failed to fetch users");
     }
 });
 
@@ -1359,7 +1372,7 @@ app.put('/api/admin/user/:id/role', authenticateAdmin, async (req, res) => {
         res.status(200).json({ message: "User status updated" });
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Failed to update user role" });
+        sendErrorResponse(res, e, "Failed to update user role");
     }
 });
 
@@ -1369,7 +1382,7 @@ app.get('/api/admin/exercises', authenticateAdmin, async (req, res) => {
         res.status(200).json(rows);
     } catch (e) {
         console.error("Failed to fetch public exercises:", e);
-        res.status(500).json({ error: "Failed to fetch public exercises" });
+        sendErrorResponse(res, e, "Failed to fetch public exercises");
     }
 });
 
@@ -1391,7 +1404,7 @@ app.put('/api/admin/exercise/:id', authenticateAdmin, async (req, res) => {
         res.status(200).json({ message: "Exercise updated successfully" });
     } catch (e) {
         console.error("Failed to update exercise:", e);
-        res.status(500).json({ error: "Failed to update exercise" });
+        sendErrorResponse(res, e, "Failed to update exercise");
     }
 });
 
@@ -1404,7 +1417,7 @@ app.delete('/api/admin/exercise/:id', authenticateAdmin, async (req, res) => {
         res.status(200).json({ message: "Exercise deleted successfully" });
     } catch (e) {
         console.error("Failed to delete exercise:", e);
-        res.status(500).json({ error: "Failed to delete exercise" });
+        sendErrorResponse(res, e, "Failed to delete exercise");
     }
 });
 
@@ -1560,7 +1573,7 @@ app.post('/api/generate-image', authenticateToken, async (req, res) => {
 
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Failed to generate image" });
+        sendErrorResponse(res, error, "Failed to generate image");
     }
 });
 
@@ -1739,7 +1752,7 @@ app.post('/api/generate-plan-image', authenticateToken, async (req, res) => {
 
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Failed to generate plan image" });
+        sendErrorResponse(res, error, "Failed to generate plan image");
     }
 });
 

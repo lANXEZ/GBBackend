@@ -52,15 +52,49 @@ function mapKeys(rows) {
   });
 }
 
+// Detect errors that indicate the database is unreachable (network down,
+// Supabase project paused, server restarting, etc.) so callers can return
+// a 503 instead of a generic 500.
+const OFFLINE_PG_CODES = new Set([
+  'ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'EAI_AGAIN', 'ECONNRESET',
+  '57P03', // cannot_connect_now
+  '08000', '08001', '08003', '08004', '08006', '08007' // connection_exception family
+]);
+
+function isDatabaseUnreachableError(err) {
+  if (!err) return false;
+  if (OFFLINE_PG_CODES.has(err.code)) return true;
+  const msg = (err.message || '').toLowerCase();
+  return (
+    msg.includes('connection terminated') ||
+    msg.includes('server closed the connection') ||
+    msg.includes('database is paused') ||
+    msg.includes('connect timeout') ||
+    msg.includes('connection refused')
+  );
+}
+
 async function executeQuery(client_or_pool, queryString, params = []) {
   const isSelect = /^\s*(SELECT|SHOW|DESCRIBE|EXPLAIN)/i.test(queryString);
   let pgQuery = convertQuery(queryString);
-  
+
   if (/^\s*INSERT\s+INTO/i.test(queryString) && !/\bRETURNING\b/i.test(queryString)) {
     pgQuery += ' RETURNING *';
   }
 
-  const commandResult = await client_or_pool.query(pgQuery, params);
+  let commandResult;
+  try {
+    commandResult = await client_or_pool.query(pgQuery, params);
+  } catch (err) {
+    if (isDatabaseUnreachableError(err)) {
+      const wrapped = new Error('Database is currently unavailable. Please try again in a moment.');
+      wrapped.code = 'DB_UNAVAILABLE';
+      wrapped.cause = err;
+      throw wrapped;
+    }
+    throw err;
+  }
+
   const mappedRows = mapKeys(commandResult.rows);
 
   if (isSelect) {
